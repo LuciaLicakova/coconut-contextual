@@ -1,0 +1,40 @@
+# Stage 1+: Coconut (latent)
+project: gsm8k_coconut_cpu
+name: run1
+save_path: exps/gsm8k_coconut_cpu
+only_eval: false
+method: coconut
+
+# Coconut schedule
+# two latent thoughts per removed step
+c_thought: 2
+epochs_per_stage: 1
+# replace only the first language step         
+max_latent_stage: 1
+# fixed-length latent segment
+pad_latent_to_max: true
+save_only_improve: true
+uniform_prob: 0.0
+
+# Model
+model_id: sshleifer/tiny-gpt2
+# path to Stage 0 best checkpoint
+load_model_path: exps/gsm8k_cot_cpu/best.pt  
+
+# Misc
+seed: 123
+resume: false
+bf16: false
+
+# Data
+train_path: data/gsm8k_mini_train.json
+val_path: data/gsm8k_mini_val.json
+
+# Optimizer
+reset_optimizer: true
+batch_size_training: 1
+debug: true
+gradient_accumulation_steps: 16
+num_epochs: 1
+lr: 5.0e-5
+weight_decay: 0.0

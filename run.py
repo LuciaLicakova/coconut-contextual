@@ -41,16 +41,24 @@ def main():
     parser = argparse.ArgumentParser(description="coconut")
     parser.add_argument("config_file")
     args = parser.parse_args()
+    
+    # Disable distributed init on CPU (NCCL is GPU-only)
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        dist.init_process_group(backend="nccl")
+        rank = int(os.environ.get("RANK", 0))
+        world_size = int(os.environ.get("WORLD_SIZE", 1))
+        local_rank = int(os.environ.get("LOCAL_RANK", 0))
+        torch.cuda.set_device(local_rank)
+    else:
+        # CPU single-process
+        dist = None
+        rank = 0
+        world_size = 1
+        local_rank = 0
 
-    # init distributed environment
-    dist.init_process_group("nccl")
-    local_rank = int(os.environ["LOCAL_RANK"])
-    rank = int(os.environ["RANK"])
-    world_size = int(os.environ["WORLD_SIZE"])
-    torch.cuda.set_device(local_rank)
 
     # load the configuration file
-    with open(args.config_file) as f:
+    with open(args.config_file, encoding="utf-8") as f:
         config_dict = yaml.safe_load(f)
 
     if rank == 0:
@@ -63,11 +71,11 @@ def main():
     if not os.path.exists(save_dir) and rank == 0:
         os.makedirs(save_dir)
 
-    torch.distributed.barrier()
+    if dist is not None:
+        torch.distributed.barrier()
     cur_ckpts = os.listdir(save_dir)
 
     # check if the job is preempted and resumed.
-
     if len(cur_ckpts) > 0 and not configs.only_eval:
         # if there are previous checkpoints, and only_eval is False
         # it means the previous run was preempted and the program is restarted.
@@ -100,6 +108,7 @@ def main():
             f"Loading from {configs.load_model_path} and skip the first {configs.resume} epochs"
         )
 
+    # Load model and tokenizer
     model = AutoModelForCausalLM.from_pretrained(configs.model_id)
     tokenizer = AutoTokenizer.from_pretrained(configs.model_id)
     tokenizer.pad_token = tokenizer.eos_token
@@ -112,35 +121,17 @@ def main():
 
     loaded = False
 
-    if configs.load_model_path != "None":
-        saved_weights = torch.load(
-            configs.load_model_path, map_location=torch.device(rank)
-        )
-
-        if configs.coconut and not any(
-            [k.startswith("base_causallm") for k in saved_weights.keys()]
-        ):
-            # we are loading a base model into coconut model
-            # e.g., for GSM8k, we used a SFTed model to skip the stage 0
+    # Replace torch.load with safetensors-compatible loading
+    if configs.load_model_path is not None and configs.load_model_path != "None":
+        try:
+            # Use from_pretrained if the checkpoint is a directory
+            model = AutoModelForCausalLM.from_pretrained(configs.load_model_path, use_safetensors=True)
             loaded = True
-            print(model.load_state_dict(saved_weights, strict=False))
-
-        elif not configs.coconut and any(
-            [k.startswith("base_causallm") for k in saved_weights.keys()]
-        ):
-            raise ValueError("Cannot load coconut model weights into a causallm model")
-
-        elif configs.coconut and any(
-            [k.startswith("base_causallm") for k in saved_weights.keys()]
-        ):
-            # loading from preempted run
-            # will handle later
-            pass
-
-        else:
-            # resume or evaluate sft model
+        except Exception as e:
+            print("Failed to load via safetensors, trying torch.load fallback (not recommended on Windows):", e)
+            saved_weights = torch.load(configs.load_model_path, map_location=torch.device(rank))
+            model.load_state_dict(saved_weights, strict=False)
             loaded = True
-            print(model.load_state_dict(saved_weights, strict=False))
 
     if not (configs.cot or configs.no_thoughts or configs.no_cot):
         # if we need new tokens, initialize their embeddings and lm heads
@@ -162,9 +153,6 @@ def main():
 
     if configs.coconut:
         model = Coconut(model, latent_id, start_id, end_id, tokenizer.eos_token_id)
-
-    if configs.load_model_path != "None" and not loaded:
-        print(model.load_state_dict(saved_weights, strict=False))
 
     print(f"Running FSDP on rank = {rank}, world size = {world_size}")
     model = model.to(rank)
@@ -239,6 +227,7 @@ def main():
 
     collator = MyCollator(tokenizer, latent_id=latent_id, label_pad_token_id=-100)
 
+    # Main training & evaluation loop
     for epoch in range(configs.resume, configs.num_epochs):
 
         scheduled_stage = (
@@ -285,9 +274,6 @@ def main():
                 collate_fn=collator,
                 sampler=DistributedSampler(dataset_train, shuffle=True),
             )
-
-            # the sampler is deterministic even if shuffle is set to True
-            # so we have shuffled the dataset when it's constructed (at every epoch).
 
             dataset_loss_val = get_cot_latent_dataset(
                 scheduled_stage,
@@ -348,9 +334,6 @@ def main():
                             )
                         text_str += "====" * 10 + "\n"
                     text_table.add_data(total_train_steps, text_str)
-                    # copy the table due to a bug in wandb
-                    # https://github.com/wandb/wandb/issues/2981
-
                     wandb_run.log({"data_table": copy(text_table)})
 
                 total_train_steps += 1
@@ -384,7 +367,9 @@ def main():
                     f"completed (loss: {round(float(loss.detach().float() * configs.gradient_accumulation_steps), 4)}"
                 )
             pbar.close()
-            dist.barrier()
+            # wrap for safety in case of CPU
+            if dist is not None:
+                dist.barrier()
 
             if (
                 not configs.save_only_improve
@@ -398,7 +383,8 @@ def main():
                     )
                     print("saving model.")
 
-                dist.barrier()
+                if dist is not None:
+                    dist.barrier()
                 del states
                 gc.collect()
                 torch.cuda.empty_cache()
@@ -416,7 +402,8 @@ def main():
 
                     outputs = parallel_model(**batch)
                     loss = outputs.loss
-                    dist.all_reduce(loss, op=dist.ReduceOp.SUM)
+                    if dist is not None:
+                        dist.all_reduce(loss, op=dist.ReduceOp.SUM)
                     total_loss += loss.item() / world_size
 
                 if wandb_run and rank == 0:
@@ -449,7 +436,6 @@ def main():
                     for k, v in batch.items()
                     if v != None and k not in ["idx", "position_ids"]
                 }
-                # https://github.com/huggingface/transformers/issues/32492
 
                 assert len(batch["input_ids"]) == 1
                 answer = answers_val[test_idx.cpu().item()]
@@ -458,7 +444,6 @@ def main():
 
                 total += 1
 
-                # synced_gpus=True in FSDP mode, as we need to keep # forward pass the same on each device
                 outputs = parallel_model.module.generate(
                     **batch,
                     max_new_tokens=max_new_tokens,
@@ -490,9 +475,10 @@ def main():
             pbar.close()
             print(f"Device {rank}: Cor={cor}, CoT={cor_cot}, Total={total}")
 
-        dist.all_reduce(cor_cot, op=dist.ReduceOp.SUM)
-        dist.all_reduce(cor, op=dist.ReduceOp.SUM)
-        dist.all_reduce(total, op=dist.ReduceOp.SUM)
+        if dist is not None:
+            dist.all_reduce(cor_cot, op=dist.ReduceOp.SUM)
+            dist.all_reduce(cor, op=dist.ReduceOp.SUM)
+            dist.all_reduce(total, op=dist.ReduceOp.SUM)
 
         cor_cot = cor_cot.item()
         cor = cor.item()
@@ -508,7 +494,8 @@ def main():
         if configs.only_eval:
             break
 
-        dist.barrier()
+        if dist is not None:
+            dist.barrier()
         if (
             cor / total > best_acc
             and configs.save_only_improve
@@ -523,7 +510,8 @@ def main():
 
             best_acc = cor / total
 
-            dist.barrier()
+            if dist is not None:
+                dist.barrier()
             del states
             gc.collect()
             torch.cuda.empty_cache()

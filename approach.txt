@@ -1,0 +1,23 @@
+# TASK: Reproduce the Coconut training curriculum (CoT stage, then latent stage) on a small subset with a tiny model, running entirely on CPU.
+# Fork https://github.com/facebookresearch/coconut on GitHub (make a personal copy (a fork) under your GitHub account)
+# Create a local folder called coconut-cpu-mini containing the fork’s code.
+git clone https://github.com/LuciaLicakova/coconut-cpu-mini.git coconut-cpu-mini
+cd coconut-cpu-mini
+# Do not edit directly on main, go to a branch called cpu-mini.
+git checkout -b cpu-mini
+# Make and activate a virtual environment
+python -m venv .venv
+.venv\Scripts\activate.bat
+# Install required packages
+pip install --upgrade pip
+pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio
+pip install transformers>=4.42 datasets pyyaml tqdm
+pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Create the preprocessing script to download the gsm8k dataset via Hugging Face, subsample 200 training and 100 validation items, produce two files in data\: gsm8k_mini_train.json, gsm8k_mini_val.json
+# Create CPU-friendly configuration files that tell Coconut how to train the tiny model on the mini GSM8K dataset: cpu_args\gsm_cot_cpu.yaml (stage 0), cpu_args\gsm_coconut_cpu.yaml (stage 1)
+# Train on CPU (tiny model, tiny data)
+torchrun --nproc_per_node 1 run.py cpu_args/gsm_cot_cpu.yaml
+torchrun --nproc_per_node 1 run.py cpu_args/gsm_coconut_cpu.yaml
+# In run.py, dist calls are wrapped to avoid errors (due to only using CPU), DDP/FSDP is skipped, and .to(rank) is replaced with .to("cpu")
+
+

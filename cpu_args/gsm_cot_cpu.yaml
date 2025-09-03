@@ -1,0 +1,48 @@
+# Stage 0: train the model to generate reasoning steps normally, without using any latent thoughts yet. Produces a “best.pt” checkpoint that Stage 1 (Coconut latent) will later load.
+project: gsm8k_cot_cpu
+name: run1
+# where model checkpoints are saved
+save_path: exps/gsm8k_cot_cpu
+# train the model on train_path and test on val_path after every epoch
+only_eval: false
+method: cot
+
+# Training settings
+# number of continuous thoughts for each reasoning step
+c_thought: 1
+epochs_per_stage: 1
+# the maximum number of training stages (in addition to the initial stage)
+max_latent_stage: 0
+pad_latent_to_max: false
+# only save checkpoint if validation improves
+save_only_improve: true
+uniform_prob: 0.0
+
+# Model
+# small enough to run on CPU
+model_id: sshleifer/tiny-gpt2
+# train from scratch
+load_model_path:
+
+# Misc
+seed: 123
+# don’t resume from previous checkpoints
+resume: false
+# most CPUs don’t have native support for bfloat16 math
+bf16: false
+
+# Data (tiny dataset produced by our script)
+train_path: data/gsm8k_mini_train.json
+val_path: data/gsm8k_mini_val.json
+
+# Optimizer
+reset_optimizer: false
+batch_size_training: 1
+debug: true
+# Process 16 single-example batches, sum the gradients, perform one weight update; simulate a batch size of 16 without needing extra RAM
+gradient_accumulation_steps: 16
+# see the entire training set
+num_epochs: 1
+lr: 5.0e-5
+# regularization term that penalizes large weights to prevent overfitting; not needed for this small CPU run
+weight_decay: 0.0
