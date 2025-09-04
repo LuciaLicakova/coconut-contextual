@@ -1,5 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
+# Last update: Lucia Licakova, 2025-09-04
 
 import torch
 import torch.nn as nn
@@ -8,6 +9,7 @@ from collections import namedtuple
 from transformers.models.gpt2 import GPT2LMHeadModel
 
 Outputs = namedtuple("Outputs", ["loss", "inputs_embeds", "logits"])
+# Upper limit for latent thoughts
 MAX_N_LATENT = 8
 
 
@@ -32,23 +34,28 @@ class Coconut(nn.Module):
 
         # tested with GPT2 and Llama3
         if isinstance(self.base_causallm, GPT2LMHeadModel):
+            # GPT's architecture in Hugging Face is slightly different
             self.embedding = self.base_causallm.transformer.get_input_embeddings()
         else:
+            # Convert token IDs (input_ids) into vectors (embeddings)
             self.embedding = self.base_causallm.get_input_embeddings()
 
     def forward(self, input_ids, attention_mask, labels, position_ids, **kwargs):
 
         logits = []
-
+        # Find all positions of latent tokens in the batch (indices of all non-zero elements of input)
+        # Each row: (batch_idx, token_pos)
         latent_indices = (
             input_ids == self.latent_token_id
         ).nonzero()  # (num_latent_tokens_in_the_batch, 2)
-
+        
+        # Keep only token positions for the current batch i
         latent_lists = [
             [idx[1].item() for idx in latent_indices if idx[0] == i]
             for i in range(input_ids.shape[0])
         ]  # bs, num_latent_tokens_in_the_instance (difference across the batch)
 
+        # The largest number of latent tokens in any example
         max_n_latents = max([len(l) for l in latent_lists])
 
         next_compute_range = (0, input_ids.shape[1])
