@@ -48,8 +48,9 @@ class Coconut(nn.Module):
         latent_indices = (
             input_ids == self.latent_token_id
         ).nonzero()  # (num_latent_tokens_in_the_batch, 2)
-        
-        # Keep only token positions for the current batch i
+
+        # A list of lists, one per batch item      
+        # For each batch keeps only the positions of latent tokens
         latent_lists = [
             [idx[1].item() for idx in latent_indices if idx[0] == i]
             for i in range(input_ids.shape[0])
@@ -57,20 +58,24 @@ class Coconut(nn.Module):
 
         # The largest number of latent tokens in any example
         max_n_latents = max([len(l) for l in latent_lists])
-
+        # Compute the whole sequence (from token 0 to the last token)
         next_compute_range = (0, input_ids.shape[1])
+        # Convert token IDs into embeddings of shape (batch_size, seq_len, hidden_dim)
         inputs_embeds = self.embedding(input_ids)
 
+        # If there are latent tokens in the batch, avoid computing embeddings for them before they are ready
         if max_n_latents > 0:
+            # Only compute up to the earliest latent token across the batch
             next_compute_range = (0, latent_indices[:, 1].min().item())
-            # before the earliest latent token position
 
+        # Store past key/value pairs from the attention layers to
+        # allow subsequent passes to reuse computations of tokens already processed
         kv_cache = None
-
+        
+        # Iteratively replace latent tokens with hidden states from previous steps
         for pass_idx in range(max_n_latents):
-
+            # First forward pass: compute the initial hidden states for the sequence before latent tokens
             if kv_cache == None:
-                # first forward pass
                 outputs = self.base_causallm(
                     inputs_embeds=inputs_embeds[
                         :, next_compute_range[0] : next_compute_range[1], :
@@ -81,12 +86,14 @@ class Coconut(nn.Module):
                     position_ids=position_ids[
                         :, next_compute_range[0] : next_compute_range[1]
                     ],
+                    # Get the hidden states of all layers (needed to update latent tokens)
                     output_hidden_states=True,
                 )
+                # No tokens have been skipped yet
                 hidden_states_offset = 0
 
             else:
-                # extract kv cache to reuse
+                # Subsequent passes: use KV cache to reuse previous attention computations
                 past_key_values = [
                     (
                         k[:, :, : next_compute_range[0], :],
@@ -94,7 +101,7 @@ class Coconut(nn.Module):
                     )
                     for k, v in kv_cache
                 ]
-
+                # Recompute embeddings from next_compute_range[0] onward
                 outputs = self.base_causallm(
                     inputs_embeds=inputs_embeds[
                         :, next_compute_range[0] : next_compute_range[1], :
@@ -108,8 +115,8 @@ class Coconut(nn.Module):
                 )
 
                 hidden_states_offset = next_compute_range[0]
-                # when we use kv_cache for the first k tokens
-                # in `outputs.hidden_states`, [0, k) will be skipped
+                # When we use kv_cache for the first k tokens
+                # in `outputs.hidden_states`, [0, k) will be skipped,
                 # so we need to keep this offset to correctly use the last hidden states
 
             logits.append(outputs.logits)
@@ -119,13 +126,14 @@ class Coconut(nn.Module):
                 (
                     input_ids.shape[1]
                     if pass_idx + 1 >= max_n_latents
+                    # If there are more latent tokens to process, increase the range by 1 token
                     else next_compute_range[1] + 1
                 ),
             )
-
+            # These last layer's hidden states will replace latent token embeddings in the next step
             hidden_states = outputs.hidden_states[
                 -1
-            ]  # Get the last layer hidden states
+            ]  
             kv_cache = outputs.past_key_values
 
             # feedback the continuous thoughts to the input_embeds
