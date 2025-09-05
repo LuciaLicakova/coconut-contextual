@@ -19,5 +19,6 @@ pip install --upgrade torch torchvision torchaudio --index-url https://download.
 torchrun --nproc_per_node 1 run.py cpu_args/gsm_cot_cpu.yaml
 torchrun --nproc_per_node 1 run.py cpu_args/gsm_coconut_cpu.yaml
 # In run.py, dist calls are wrapped to avoid errors (due to only using CPU), DDP/FSDP is skipped, and .to(rank) is replaced with .to("cpu")
+# train: PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> python run.py cpu_args/gsm_cot_cpu.yaml
 
 

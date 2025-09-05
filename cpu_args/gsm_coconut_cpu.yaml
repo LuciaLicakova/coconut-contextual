@@ -3,7 +3,11 @@ project: gsm8k_coconut_cpu
 name: run1
 save_path: exps/gsm8k_coconut_cpu
 only_eval: false
-method: coconut
+
+coconut: True
+cot: False
+no_thoughts: False
+no_cot: False
 
 # Coconut schedule
 # two latent thoughts per removed step
@@ -13,7 +17,7 @@ epochs_per_stage: 1
 max_latent_stage: 1
 # fixed-length latent segment
 pad_latent_to_max: true
-save_only_improve: true
+save_only_improve: false
 uniform_prob: 0.0
 
 # Model
@@ -22,8 +26,8 @@ model_id: sshleifer/tiny-gpt2
 load_model_path: exps/gsm8k_cot_cpu/best.pt  
 
 # Misc
-seed: 123
-resume: false
+seed: 0
+resume: 3
 bf16: false
 
 # Data

@@ -5,9 +5,12 @@ name: run1
 save_path: exps/gsm8k_cot_cpu
 # train the model on train_path and test on val_path after every epoch
 only_eval: false
-method: cot
 
 # Training settings
+coconut: False
+cot: True
+no_thoughts: False
+no_cot: False
 # number of continuous thoughts for each reasoning step
 c_thought: 1
 epochs_per_stage: 1
@@ -22,12 +25,12 @@ uniform_prob: 0.0
 # small enough to run on CPU
 model_id: sshleifer/tiny-gpt2
 # train from scratch
-load_model_path:
+load_model_path: None
 
 # Misc
-seed: 123
+seed: 0
 # don’t resume from previous checkpoints
-resume: false
+resume: 0
 # most CPUs don’t have native support for bfloat16 math
 bf16: false
 

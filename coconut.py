@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-# Last update: Lucia Licakova, 2025-09-04
+# Last update: Lucia Licakova, 2025-09-05
 
 import torch
 import torch.nn as nn
@@ -80,6 +80,7 @@ class Coconut(nn.Module):
                     inputs_embeds=inputs_embeds[
                         :, next_compute_range[0] : next_compute_range[1], :
                     ],
+                    # how the new token relates to past and present tokens (used to update its representation)
                     attention_mask=attention_mask[
                         :, next_compute_range[0] : next_compute_range[1]
                     ],
@@ -113,40 +114,44 @@ class Coconut(nn.Module):
                     past_key_values=past_key_values,
                     output_hidden_states=True,
                 )
-
+                # the model didn’t output hidden states for the prefix [0, k) because those tokens came from KV cache
                 hidden_states_offset = next_compute_range[0]
-                # When we use kv_cache for the first k tokens
-                # in `outputs.hidden_states`, [0, k) will be skipped,
-                # so we need to keep this offset to correctly use the last hidden states
+                # [0, k) were skipped in outputs.hidden_states, so we need to
+                # correctly use the last hidden state
 
             logits.append(outputs.logits)
 
             next_compute_range = (
+                # New start = previous end
                 next_compute_range[1],
                 (
+                    # If this was the last latent token pass, jump to the end of the sequence
                     input_ids.shape[1]
                     if pass_idx + 1 >= max_n_latents
-                    # If there are more latent tokens to process, increase the range by 1 token
+                    # Otherwise extend by one token (the next latent position)
                     else next_compute_range[1] + 1
                 ),
             )
-            # These last layer's hidden states will replace latent token embeddings in the next step
+            # The final-layer hidden states will replace latent token embeddings in the next step
             hidden_states = outputs.hidden_states[
                 -1
             ]  
             kv_cache = outputs.past_key_values
 
-            # feedback the continuous thoughts to the input_embeds
+            # Feedback the continuous thoughts to the input_embeds
 
-            # first decide the positions to feedback
+            # Decide which latent tokens get replaced with a computed vector during this pass
+            # During each pass, we replace the pass_idx'th latent token in each sequence
             filling_indices = [
                 (instance_idx, mask_list[pass_idx])
                 for instance_idx, mask_list in enumerate(latent_lists)
+                # skip if there is no pass_idx'th latent token in this sequence
                 if len(mask_list) > pass_idx
             ]
 
-            # to avoid in-place operations
-            # break down inputs_embeds (bs, len, hidden_size) into a list of list of 1-d tensors
+            # To avoid in-place operations on the big tensor inputs_embeds (batch_size, seq_len, hidden_size)
+            # tensor_list contains one list per batch;
+            # each of those inner lists contains one vector per position in the sequence
             tensor_list = [
                 [
                     inputs_embeds[batch_idx, pos, :]
@@ -155,33 +160,37 @@ class Coconut(nn.Module):
                 for batch_idx in range(inputs_embeds.shape[0])
             ]
 
-            # replace some of them with continuous thoughts
+            # Replace each latent token position's embedding with the previous token’s final-layer hidden state
             for idx_pair in filling_indices:
                 batch_idx, token_idx = idx_pair
 
-                # replace it with the preceding last hidden states
                 tensor_list[batch_idx][token_idx] = hidden_states[
+                    # "-1" take the hidden state of the token immediately before the latent token
                     batch_idx, token_idx - 1 - hidden_states_offset, :
                 ]
 
-            # assemble the new inputs_embeds
+            # Convert the Python lists back into a proper tensor of shape (batch, seq_len, hidden_size)
             inputs_embeds = torch.stack(
                 [
+                    # Now inputs_embeds contains replacements at the latent-token positions
                     torch.stack(tensor_list[batch_idx])
                     for batch_idx in range(inputs_embeds.shape[0])
                 ]
             )
 
-        # final pass
+        # Final pass: process the remaining tokens after all latent tokens have been replaced
         outputs = self.base_causallm(
             inputs_embeds=inputs_embeds[
+                # Keep all batches, pick only the unprocessed tokens, keep all hidden dimensions
                 :, next_compute_range[0] : next_compute_range[1], :
             ],
+            # Only attend to tokens seen so far
             attention_mask=attention_mask[:, : next_compute_range[1]],
             position_ids=position_ids[:, next_compute_range[0] : next_compute_range[1]],
             past_key_values=(
                 [
                     (
+                        # Reuse attention only from the past context (before the current compute range)
                         k[:, :, : next_compute_range[0], :],
                         v[:, :, : next_compute_range[0], :],
                     )
@@ -192,19 +201,31 @@ class Coconut(nn.Module):
             ),
             output_hidden_states=True,
         )
-
         logits.append(outputs.logits)
-
+        
+        # Perform max_n_latents + 1 forward passes:
+        # max_n_latents latent thoughts are scheduled in the current training stage;
+        # compute a new latent thought with each pass and run an additional forward pass
+        # to obtain a loss on the remaining text sequence
         self.gen_forward_cnt += max_n_latents + 1
 
+        # Concatenate logits from all passes to get predictions for each position in the sequence
         logits = torch.cat(logits, dim=-2)
+        # Predicted token probabilities for every position except the last one (can’t predict beyond the sequence)
         shift_logits = logits[..., :-1, :].contiguous()
+        # True token IDs for every position except the first one (can’t predict the very first token)
         shift_labels = labels[..., 1:].contiguous()
+        # Each prediction is compared to the next token in the sequence
+
+        
         loss_fct = CrossEntropyLoss()
+        # Apply cross-entropy loss between predicted distributions and true labels
         loss = loss_fct(
+            # Flatten for CrossEntropyLoss which expects
+            # input shape (N, C) N examples, C classes, target shape (N,) class indices for each example
             shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
         )
-
+        # Output a single scalar loss for the entire batch
         return Outputs(loss=loss, inputs_embeds=inputs_embeds, logits=logits)
 
     def train(self):
@@ -226,35 +247,44 @@ class Coconut(nn.Module):
         self.gen_forward_cnt = 0
 
         assert input_ids.shape[0] == 1, "only support batch_size == 1 now"
-
+        # Convert only the first sequence to a list of generated tokens without tracking gradients
         tokens = input_ids[0].detach().tolist()
 
-        labels = input_ids.clone()  # placeholder. not used.
+        labels = input_ids.clone()  # placeholder to match the forward method’s interface; not used.
         outputs = self.forward(
             input_ids,
+            # attention_mask is all ones, all tokens are valid
             torch.ones_like(input_ids, device=input_ids.device),
             labels,
+            # position_ids are sequential integers [0, 1, 2, ...]
             torch.arange(
                 0, input_ids.shape[1], dtype=torch.long, device=input_ids.device
             ).reshape(1, -1),
         )
         inputs_embeds = outputs.inputs_embeds
 
-        # get the first token using the current hidden state
+        # Pick the token with the highest probability from the last position of the logits
         next_token = torch.argmax(outputs.logits[0, -1]).item()
+        # Generate the first token
         tokens.append(next_token)
+        # Convert the chosen token to its embedding
         new_token_embed = self.embedding(
             torch.tensor(next_token, device=input_ids.device)
         ).view(1, 1, -1)
+        # Append to the existing sequence embeddings
         new_inputs_embeds = torch.cat((inputs_embeds, new_token_embed), dim=1)
 
-        # get other tokens
+        # Generate other tokens up to max_new_tokens
         for _ in range(max_new_tokens - 1):
+            # Pass the current embeddings to the model
             outputs = self.base_causallm(inputs_embeds=new_inputs_embeds)
             self.gen_forward_cnt += 1
+            # Choose the most probable token
             next_token = torch.argmax(outputs.logits[0, -1]).item()
+            # If the model predicts that the sequence should stop, no more tokens are generated
             if next_token == self.eos_token_id:
                 break
+            # Update the token list and embeddings for the next step
             tokens.append(next_token)
             new_token_embed = self.embedding(
                 torch.tensor(next_token, device=input_ids.device)
@@ -262,7 +292,7 @@ class Coconut(nn.Module):
             new_inputs_embeds = torch.cat((new_inputs_embeds, new_token_embed), dim=1)
 
         if synced_gpus:
-            # in FSDP, the number of forward pass need to be the same across devices
+            # In FSDP all GPUs must perform the same number of forward passes
             while (
                 self.gen_forward_cnt < max_new_tokens + MAX_N_LATENT
             ):  # leave some room for latent tokens
@@ -270,7 +300,7 @@ class Coconut(nn.Module):
                 _ = self.base_causallm(inputs_embeds=new_inputs_embeds)
 
         if output_embedding:
-            # for analysis purpose
+            # For the purpose of analysis
             return torch.tensor(tokens).view(1, -1), new_inputs_embeds
 
         else:

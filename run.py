@@ -174,9 +174,14 @@ def main():
         model = Coconut(model, latent_id, start_id, end_id, tokenizer.eos_token_id)
 
     # With multiple GPUs, each process gets its own rank (GPU ID)
-    # On CPU-only runs, this section would be skipped
     print(f"Running FSDP on rank = {rank}, world size = {world_size}")
-    model = model.to(rank)
+    
+    device = torch.device("cuda", rank) if torch.cuda.is_available() else torch.device("cpu")
+    # Only move to CUDA if available
+    if torch.cuda.is_available():
+        model = model.to(device)
+
+
     llama_auto_wrap_policy = functools.partial(
         transformer_auto_wrap_policy,
         transformer_layer_cls={
@@ -188,14 +193,20 @@ def main():
     if configs.bf16:
         model.to(torch.bfloat16)
 
-    # If only eval, use DistributedDataParallel (to avoid bugs in fsdp)
-    if configs.only_eval:
-        parallel_model = DDP(model, device_ids=[rank])
-    # Fully Sharded Data Parallel shards (splits) the model’s layers across devices to save memory
+
+    if torch.cuda.is_available():
+        # GPU: If only eval, use DistributedDataParallel (to avoid bugs in fsdp)
+        if configs.only_eval:
+            parallel_model = DDP(model, device_ids=[rank])
+        # GPU: Fully Sharded Data Parallel shards (splits) the model’s layers across devices to save memory
+        else:
+            parallel_model = FSDP(
+                model, auto_wrap_policy=llama_auto_wrap_policy, device_id=rank
+            )
     else:
-        parallel_model = FSDP(
-            model, auto_wrap_policy=llama_auto_wrap_policy, device_id=rank
-        )
+        # CPU: no FSDP
+        parallel_model = model
+
     # Delete the original model object since it’s now wrapped inside parallel_model
     del model
     # Only the first process prints the structure of the wrapped model, so logs don’t get cluttered
@@ -373,7 +384,7 @@ def main():
                 # Move tensors in the batch (input IDs, attention masks, labels, etc.) to the device
                 # Exclude "idx" because that’s just metadata.
                 batch = {
-                    key: batch[key].to(rank) for key in batch.keys() if key != "idx"
+                    key: batch[key].to(device) for key in batch.keys() if key != "idx"
                 }
                 # Run the model on this batch to get outputs
                 outputs = parallel_model(**batch)
@@ -446,7 +457,7 @@ def main():
                 for step, batch in enumerate(valid_loss_dataloader):
 
                     batch = {
-                        key: batch[key].to(rank) for key in batch.keys() if key != "idx"
+                        key: batch[key].to(device) for key in batch.keys() if key != "idx"
                     }
 
                     outputs = parallel_model(**batch)
@@ -488,7 +499,7 @@ def main():
                 test_idx = batch["idx"][0]
 
                 batch = {
-                    k: v.to(rank)
+                    k: v.to(device)
                     for k, v in batch.items()
                     if v != None and k not in ["idx", "position_ids"]
                 }
