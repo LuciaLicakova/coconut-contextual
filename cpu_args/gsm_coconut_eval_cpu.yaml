@@ -13,8 +13,8 @@ no_cot: False
 
 # Coconut schedule (kept consistent)
 c_thought: 2
-epochs_per_stage: 1
-max_latent_stage: 1
+epochs_per_stage: 3
+max_latent_stage: 3
 pad_latent_to_max: true
 save_only_improve: false
 uniform_prob: 0.0
@@ -35,9 +35,9 @@ val_path: data/gsm_valid.json
 
 # Optimizer (not used, but required keys)
 reset_optimizer: true
-batch_size_training: 1
+batch_size_training: 4
 debug: true
 gradient_accumulation_steps: 16
-num_epochs: 1
+num_epochs: 3
 lr: 5.0e-5
 weight_decay: 0.0

@@ -36,6 +36,4 @@ python run.py cpu_args/gsm_coconut_eval_cpu.yaml
 # In run.py, dist calls are wrapped to avoid errors (due to only using CPU), DDP/FSDP is skipped, and .to(rank) is replaced with .to("cpu")
 # train: PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> python run.py cpu_args/gsm_cot_cpu.yaml
 
-why do we need gsm_test.json?
-
 

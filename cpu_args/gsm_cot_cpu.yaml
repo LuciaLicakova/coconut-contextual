@@ -13,9 +13,9 @@ no_thoughts: False
 no_cot: False
 # number of continuous thoughts for each reasoning step
 c_thought: 1
-epochs_per_stage: 1
+epochs_per_stage: 3
 # the maximum number of training stages (in addition to the initial stage)
-max_latent_stage: 0
+max_latent_stage: 3
 pad_latent_to_max: false
 # only save checkpoint if validation improves
 save_only_improve: true
@@ -40,12 +40,12 @@ val_path: data/gsm_valid.json
 
 # Optimizer
 reset_optimizer: false
-batch_size_training: 1
+batch_size_training: 4
 debug: true
 # Process 16 single-example batches, sum the gradients, perform one weight update; simulate a batch size of 16 without needing extra RAM
 gradient_accumulation_steps: 16
 # see the entire training set
-num_epochs: 1
+num_epochs: 3
 lr: 5.0e-5
 # regularization term that penalizes large weights to prevent overfitting; not needed for this small CPU run
 weight_decay: 0.0
