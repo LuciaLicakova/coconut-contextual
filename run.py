@@ -485,13 +485,14 @@ def main():
             colour="blue", desc=f"Test Accuracy", total=total_length, dynamic_ncols=True
         )
         # Counters
+        device = torch.device("cuda", rank) if torch.cuda.is_available() else torch.device("cpu")
         cor, cor_cot, total = (
             # How many answers match the ground truth
-            torch.tensor(0, device=rank),
+            torch.tensor(0, device=device),
             # How many chain-of-thought outputs match the reference
-            torch.tensor(0, device=rank),
+            torch.tensor(0, device=device),
             # Total examples processed
-            torch.tensor(0, device=rank),
+            torch.tensor(0, device=device),
         )
 
         with torch.no_grad():
