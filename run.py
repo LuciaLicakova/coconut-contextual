@@ -12,7 +12,7 @@ import wandb
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 import torch.distributed as dist
-from torch.utils.data.distributed import DistributedSampler
+##from torch.utils.data.distributed import DistributedSampler
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 from transformers.models.gpt2.modeling_gpt2 import GPT2Block
@@ -286,7 +286,7 @@ def main():
             batch_size=1,
             collate_fn=collator,
             # in distributed runs each process gets its own slice of the dataset
-            sampler=DistributedSampler(dataset_gen_val, shuffle=False),
+            sampler=None,
         )
 
         if not configs.only_eval:
@@ -305,11 +305,12 @@ def main():
             train_dataloader = torch.utils.data.DataLoader(
                 dataset_train,
                 num_workers=1,
-                shuffle=False,
+                # shuffling has to be set here because we don't use DistributedSampler
+                shuffle=True,
                 pin_memory=True,
                 batch_size=configs.batch_size_training,
                 collate_fn=collator,
-                sampler=DistributedSampler(dataset_train, shuffle=True),
+                sampler=None,
             )
             # Prepare another version for loss evaluation
             dataset_loss_val = get_cot_latent_dataset(
@@ -325,11 +326,12 @@ def main():
             valid_loss_dataloader = torch.utils.data.DataLoader(
                 dataset_loss_val,
                 num_workers=1,
+                # no shuffle even in DistributedSampler
                 shuffle=False,
                 pin_memory=True,
                 batch_size=configs.batch_size_training,
                 collate_fn=collator,
-                sampler=DistributedSampler(dataset_loss_val, shuffle=False),
+                sampler=None,
             )
             # Reset the optimizer based on configs
             if configs.reset_optimizer:
@@ -340,8 +342,9 @@ def main():
                     lr=configs.lr,
                     weight_decay=configs.weight_decay,
                 )
-            # Switch into training mode
-            parallel_model.module.train()
+            # Train the object whether it's wrapped for distributed
+            # training (parallel_model.module) or not (parallel_model)
+            getattr(parallel_model, "module", parallel_model).train()
             # Number of mini-batches in one epoch // how many batches to process before updating weights (optimizer.step()) 
             # Number of optimizer updates per epoch
             total_length = len(train_dataloader) // configs.gradient_accumulation_steps
@@ -451,8 +454,8 @@ def main():
             total_loss = 0
             # Disable gradient computation during validation
             with torch.no_grad():
-                # Switch to evaluation mode
-                parallel_model.module.eval()
+                # Switch to evaluation mode (either wrapped or not)
+                getattr(parallel_model, "module", parallel_model).eval()
                 # Iterate through validation batches and compute loss
                 for step, batch in enumerate(valid_loss_dataloader):
 
@@ -492,7 +495,8 @@ def main():
         )
 
         with torch.no_grad():
-            parallel_model.module.eval()
+            # Handle both wrapped and not wrapped models
+            getattr(parallel_model, "module", parallel_model).eval()
             for idx, batch in enumerate(valid_gen_dataloader):
                 # A tensor that stores the original index of this example in the validation dataset
                 # Which row in the original dataset this batch corresponds to
@@ -511,11 +515,12 @@ def main():
                 question = question_val[test_idx.cpu().item()]
 
                 total += 1
-                # Generate text tokens for the input question
-                outputs = parallel_model.module.generate(
+                # Generate text tokens for the input question (use the correct model)
+                outputs = getattr(parallel_model, "module", parallel_model).generate(
                     **batch,
                     max_new_tokens=max_new_tokens,
-                    synced_gpus=not configs.only_eval,
+                    # synced_gpus must be False on CPU
+                    synced_gpus=not configs.only_eval and torch.cuda.is_available(),
                 )
                 # Convert token IDs to readable text
                 text_output = tokenizer.decode(outputs[0], skip_special_tokens=True)

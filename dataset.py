@@ -73,7 +73,8 @@ def get_dataset(path, tokenizer, max_size=1000000000):
     else:
         # Remove the original fields (question, steps, answer) so only tokenized fields remain
         dataset = dataset.map(
-            tokenize_sample, remove_columns=list(dataset.features), num_proc=32
+            # Insufficient resources with num_proc=32
+            tokenize_sample, remove_columns=list(dataset.features), num_proc=4
         )
 
     # Verify that tokenizing the question, steps, and answer separately matches
@@ -263,7 +264,7 @@ def get_question_latent_dataset(
     # Apply process_dataset to all samples in the base dataset
     return base_dataset_valid.map(
         # The output only contains processed features
-        process_dataset, remove_columns=list(base_dataset_valid.features), num_proc=32
+        process_dataset, remove_columns=list(base_dataset_valid.features), num_proc=4
     )
 
 
@@ -370,7 +371,8 @@ def get_cot_latent_dataset(
     
     else:
         processed_dataset = base_dataset.map(
-            process_dataset, remove_columns=list(base_dataset.features), num_proc=32
+            # Insufficient system resources with num_proc=32
+            process_dataset, remove_columns=list(base_dataset.features), num_proc=4
         )
         if shuffle:
             processed_dataset = processed_dataset.shuffle()

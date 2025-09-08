@@ -35,8 +35,8 @@ resume: 0
 bf16: false
 
 # Data (tiny dataset produced by our script)
-train_path: data/gsm8k_mini_train.json
-val_path: data/gsm8k_mini_val.json
+train_path: data/gsm_train.json
+val_path: data/gsm_valid.json
 
 # Optimizer
 reset_optimizer: false
