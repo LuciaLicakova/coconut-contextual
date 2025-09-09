@@ -25,6 +25,8 @@ PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> pyth
 python run.py cpu_args/gsm_cot_cpu.yaml
 -----------------------
 
+# With gpus, update yaml settings
+
 # Select a checkpoint as the initialization of Coconut (the validation accuracy is expected to be around 40%). Replace the load_model_path in the args/gsm_coconut.yaml with the selected checkpoint, and run
 python run.py cpu_args/gsm_coconut_cpu.yaml
 

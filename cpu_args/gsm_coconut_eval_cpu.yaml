@@ -1,43 +1,37 @@
 # Evaluation-only config for Stage 1 (Coconut)
-project: gsm8k_coconut_cpu
-name: eval_run
+project: coconut
+name: gsm-coconut-eval
 save_path: exps/gsm8k_coconut_cpu
-# No training happens
+
 only_eval: true
 
-# Coconut model
 coconut: True
 cot: False
 no_thoughts: False
 no_cot: False
 
-# Coconut schedule (kept consistent)
 c_thought: 2
 epochs_per_stage: 3
 max_latent_stage: 3
 pad_latent_to_max: true
+
 save_only_improve: false
 uniform_prob: 0.0
 
-# Model
-model_id: sshleifer/tiny-gpt2
-# Load the best checkpoint from Stage 1
+model_id: openai-community/gpt2
 load_model_path: exps/gsm8k_coconut_cpu/best.pt
 
-# Misc
 seed: 0
 resume: 15
 bf16: false
-
-# Data
 train_path: data/gsm_train.json
 val_path: data/gsm_valid.json
+reset_optimizer: True
 
-# Optimizer (not used, but required keys)
-reset_optimizer: true
 batch_size_training: 4
 debug: true
-gradient_accumulation_steps: 16
-num_epochs: 3
-lr: 5.0e-5
-weight_decay: 0.0
+gradient_accumulation_steps: 1
+
+num_epochs: 10
+lr: 1.0e-4
+weight_decay: 0.01
