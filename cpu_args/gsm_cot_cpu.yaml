@@ -3,7 +3,7 @@ project: coconut
 name: gsm-cot
 save_path: exps/gsm8k_cot_cpu
 
-only_eval: false
+only_eval: False
 
 coconut: False
 cot: True
@@ -23,16 +23,16 @@ load_model_path: None
 
 seed: 0
 resume: 0
-bf16: false
+bf16: False
 train_path: data/gsm_train.json
 val_path: data/gsm_valid.json
 reset_optimizer: False
 
-batch_size_training: 4
-debug: true
+batch_size_training: 16
+debug: True
 gradient_accumulation_steps: 1
 
-num_epochs: 10
+num_epochs: 25
 lr: 1.0e-4
 # regularization term that penalizes large weights to prevent overfitting
 weight_decay: 0.01

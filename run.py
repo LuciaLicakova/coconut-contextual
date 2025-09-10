@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-# Last update: Lucia Licakova, 2025-09-09
+# Last update: Lucia Licakova, 2025-09-10
 
 import torch
 import torch.distributed
@@ -42,9 +42,10 @@ def main():
     parser = argparse.ArgumentParser(description="coconut")
     parser.add_argument("config_file")
     args = parser.parse_args()
+    dist_is_initialized = False
     
-    # Disable distributed init to make the code runnable on CPU
     if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        dist_is_initialized = True
         # NCCL is GPU-only
         dist.init_process_group(backend="nccl")
         rank = int(os.environ.get("RANK", 0))
@@ -52,8 +53,7 @@ def main():
         local_rank = int(os.environ.get("LOCAL_RANK", 0))
         torch.cuda.set_device(local_rank)
     else:
-        # CPU single-process
-        dist = None
+        # Single GPU or CPU
         rank = 0
         world_size = 1
         local_rank = 0
@@ -73,7 +73,7 @@ def main():
     if not os.path.exists(save_dir) and rank == 0:
         os.makedirs(save_dir)
 
-    if dist is not None:
+    if torch.distributed.is_initialized():
         torch.distributed.barrier()
     cur_ckpts = os.listdir(save_dir)
 
@@ -194,7 +194,7 @@ def main():
         model.to(torch.bfloat16)
 
 
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
         # GPU: If only eval, use DistributedDataParallel (to avoid bugs in fsdp)
         if configs.only_eval:
             parallel_model = DDP(model, device_ids=[rank])
@@ -426,7 +426,7 @@ def main():
                 )
             pbar.close()
             # Wrap for safety in case of CPU
-            if dist is not None:
+            if torch.distributed.is_initialized():
                 # If distributed training is active, ensure all processes wait until everyone reaches this point
                 dist.barrier()
             # During training and not in debug mode
@@ -443,7 +443,7 @@ def main():
                     )
                     print("saving model.")
 
-                if dist is not None:
+                if torch.distributed.is_initialized():
                     dist.barrier()
                 # Cleanup and garbage collection
                 del states
@@ -465,7 +465,7 @@ def main():
 
                     outputs = parallel_model(**batch)
                     loss = outputs.loss
-                    if dist is not None:
+                    if torch.distributed.is_initialized():
                         dist.all_reduce(loss, op=dist.ReduceOp.SUM)
                     # Get the average per process
                     total_loss += loss.item() / world_size
@@ -516,13 +516,21 @@ def main():
                 question = question_val[test_idx.cpu().item()]
 
                 total += 1
+
+                # Determine if synced_gpus should be True
+                use_synced_gpus = (
+                    not configs.only_eval 
+                    and torch.cuda.is_available() 
+                    and torch.cuda.device_count() > 1 
+                    and torch.distributed.is_initialized()
+                )
                 # Generate text tokens for the input question (use the correct model)
                 outputs = getattr(parallel_model, "module", parallel_model).generate(
                     **batch,
                     max_new_tokens=max_new_tokens,
-                    # synced_gpus must be False on CPU
-                    synced_gpus=not configs.only_eval and torch.cuda.is_available(),
+                    synced_gpus=use_synced_gpus,
                 )
+                
                 # Convert token IDs to readable text
                 text_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
                 # Extract the final answer after a # marker
@@ -551,7 +559,7 @@ def main():
             pbar.close()
             print(f"Device {rank}: Cor={cor}, CoT={cor_cot}, Total={total}")
 
-        if dist is not None:
+        if torch.distributed.is_initialized():
             # Combine results from multiple GPUs if running distributed training
             dist.all_reduce(cor_cot, op=dist.ReduceOp.SUM)
             dist.all_reduce(cor, op=dist.ReduceOp.SUM)
@@ -571,7 +579,7 @@ def main():
         if configs.only_eval:
             break
 
-        if dist is not None:
+        if torch.distributed.is_initialized():
             dist.barrier()
         # Save a new checkpoint only if this validation accuracy is better than previous best
         if (
@@ -588,7 +596,7 @@ def main():
 
             best_acc = cor / total
 
-            if dist is not None:
+            if torch.distributed.is_initialized():
                 dist.barrier()
             # Cleanup
             del states

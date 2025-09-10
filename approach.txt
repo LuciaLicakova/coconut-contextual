@@ -23,6 +23,47 @@ PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> pyth
 
 # Train on CPU (tiny model) with CoT as stage 0
 python run.py cpu_args/gsm_cot_cpu.yaml
+
+# Train using GPU
+PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> ssh student01
+D3a3SeNH
+nvidia-smi
+# Make sure GPU 1 is free.
+# Update the Google Sheet: enter your name (licakova) and the GPU number to reserve it
+# Activate environment
+source /system/apps/studentenv/miniconda3/bashrc
+conda activate coconut
+cd /system/user/studentwork/licakova/coconut-cpu-mini
+# Start training using tmux (keeps running if you log out)
+tmux new -s coconut_run
+# Run on a single GPU
+CUDA_VISIBLE_DEVICES=1 python run.py cpu_args/gsm_cot_cpu.yaml
+
+# After modifying locally
+ctrl+b d
+# Leave the ssh session
+exit
+# Update from local Windows PowerShell
+scp -P 5792 C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini\run.py licakova@student01.ai-lab.jku.at:/system/user/studentwork/licakova/coconut-cpu-mini/
+scp -P 5792 -r C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini\cpu_args licakova@student01.ai-lab.jku.at:/system/user/studentwork/licakova/coconut-cpu-mini/
+
+# Attach tmux
+ssh -p 5792 licakova@student01.ai-lab.jku.at
+tmux attach -t coconut_run
+# Run the code
+
+
+
+
+# Once it starts, detach tmux: Ctrl+b then d
+# Check progress, GPU usage, CPU/RAM usage anytime
+tmux attach -t coconut_run 
+nvidia-smi                  
+top                         
+# When done: kill process if needed
+ps aux | grep python
+kill <PID>
+# Update the Google Sheet to free the GPU.
 -----------------------
 
 # With gpus, update yaml settings
@@ -35,7 +76,7 @@ python run.py cpu_args/gsm_coconut_cpu.yaml
 python run.py cpu_args/gsm_coconut_eval_cpu.yaml
 
 
-# In run.py, dist calls are wrapped to avoid errors (due to only using CPU), DDP/FSDP is skipped, and .to(rank) is replaced with .to("cpu")
+# In run.py, dist calls are wrapped to avoid errors (when only using CPU), DDP/FSDP is skipped, and .to(rank) is replaced with .to(device)
 # train: PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> python run.py cpu_args/gsm_cot_cpu.yaml
 
 
