@@ -29,7 +29,7 @@ val_path: data/gsm_valid.json
 reset_optimizer: True
 
 batch_size_training: 16
-debug: true
+debug: False
 gradient_accumulation_steps: 1
 
 num_epochs: 25
