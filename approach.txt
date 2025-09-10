@@ -1,4 +1,4 @@
-# TASK: Reproduce the Coconut training curriculum (CoT stage, then latent stage) on a small subset with a tiny model, running entirely on CPU.
+# TASK: Reproduce the Coconut training curriculum (CoT stage, then latent stage) on the original data with the original model, running on either CPU, a single GPU, or multiple GPUs.
 
 # PREPARATION
 # Fork https://github.com/facebookresearch/coconut on GitHub (make a personal copy (a fork) under your GitHub account)
@@ -47,8 +47,10 @@ cd /system/user/studentwork/licakova/coconut-cpu-mini
 tmux new -s coconut_run
 # Run on a single GPU
 CUDA_VISIBLE_DEVICES=1 python run.py cpu_args/gsm_cot_cpu.yaml
+CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=1 --nproc_per_node=1 run.py cpu_args/gsm_cot_cpu.yaml
 # 2 GPUs
-CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py cpu_args/gsm_cot.yaml
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py args/gsm_cot.yaml
+
 
 
 # After modifying locally
@@ -58,13 +60,12 @@ exit
 # Update from local Windows PowerShell
 scp -P 5792 C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini\run.py licakova@student01.ai-lab.jku.at:/system/user/studentwork/licakova/coconut-cpu-mini/
 scp -P 5792 -r C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini\cpu_args licakova@student01.ai-lab.jku.at:/system/user/studentwork/licakova/coconut-cpu-mini/
+scp -P 5792 -r C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini\args licakova@student01.ai-lab.jku.at:/system/user/studentwork/licakova/coconut-cpu-mini/
 
 # Attach tmux
 ssh -p 5792 licakova@student01.ai-lab.jku.at
 tmux attach -t coconut_run
 # Run the code
-
-
 
 
 # Once it starts, detach tmux: Ctrl+b then d
@@ -77,23 +78,23 @@ ps aux | grep python
 kill <PID>
 # Update the Google Sheet to free the GPU.
 -----------------------
+# Ensure run.py works for a CPU (cpu_args, batch_size_training: 16), a single GPU (cpu_args), multiple GPUs (args)
+# Run on multiple GPUs with the original batch size to try to increase the accuracy
 
-# With gpus, update yaml settings
+# Run actual latent reasoning (stage 1)
+-- Select a checkpoint as the initialization of Coconut (the validation accuracy is expected to be around 40%). Replace the load_model_path in the args/gsm_coconut.yaml with the selected checkpoint, and run
+python run.py cpu_args/gsm_coconut_cpu.yaml (MULTIPLE GPUS, torchrun)
+# Evaluate: find the checkpoint with best validation accuracy, and put the path as load_model_path in args/gsm_coconut_eval.yaml. Then evaluate
+python run.py cpu_args/gsm_coconut_eval_cpu.yaml (MULTIPLE GPUS, torchrun)
 
-# Select a checkpoint as the initialization of Coconut (the validation accuracy is expected to be around 40%). Replace the load_model_path in the args/gsm_coconut.yaml with the selected checkpoint, and run
-python run.py cpu_args/gsm_coconut_cpu.yaml
-
-
-# Find the checkpoint with best validation accuracy, and put the path as load_model_path in args/gsm_coconut_eval.yaml. Then evaluate
-python run.py cpu_args/gsm_coconut_eval_cpu.yaml
-
-
-# In run.py, dist calls are wrapped to avoid errors (when only using CPU), DDP/FSDP is skipped, and .to(rank) is replaced with .to(device)
-# train: PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> python run.py cpu_args/gsm_cot_cpu.yaml
-# my modified files are in cpu_args although they are also used for GPU training (use *_cpu.yaml for CPU or a single GPU; batch_size_training: 16)
+# Conclude something
+# Create datasets and yaml files for ProntoQA
+# Repeat the steps (do the experiments) for ProntoQA
+# Create datasets and yaml files for ProsQA
+# Repeat the steps (do the experiments) for ProsQA
 
 -----------------------------
-AFTER CUDA_VISIBLE_DEVICES=1 python run.py cpu_args/gsm_cot_cpu.yaml
+OUTPUT CUDA_VISIBLE_DEVICES=1 python run.py cpu_args/gsm_cot_cpu.yaml (requires smaller batch size)
 [licakova@student01 coconut-cpu-mini]$ tmux capture-pane -S - -E - -p > full_run.log
 [licakova@student01 coconut-cpu-mini]$ grep -E "Accuracy on validation set|saving model" full_run.log
 Accuracy on validation set: 0 / 32 = 0.0
@@ -112,5 +113,8 @@ Accuracy on validation set: 1 / 32 = 0.03125
 Accuracy on validation set: 2 / 32 = 0.0625
 Accuracy on validation set: 2 / 32 = 0.0625
 Accuracy on validation set: 1 / 32 = 0.03125
+
+OUTPUT CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py args/gsm_cot.yaml
+
 
 

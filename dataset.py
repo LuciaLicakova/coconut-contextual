@@ -58,8 +58,9 @@ def get_dataset(path, tokenizer, max_size=1000000000):
     dataset = Dataset.from_dict({k: [d[k] for d in data] for k in keys})
 
     # If there are multiple GPUs available, handle distributed processing
-    if torch.cuda.device_count() > 1:
-        if dist.get_rank() == 0:
+    if dist.is_initialized() and torch.cuda.device_count() > 1:
+        rank = dist.get_rank()
+        if rank == 0:
             processed_dataset = [
                 dataset.map(
                     tokenize_sample, remove_columns=list(dataset.features), num_proc=32
@@ -69,11 +70,10 @@ def get_dataset(path, tokenizer, max_size=1000000000):
             processed_dataset = [None]
         dist.broadcast_object_list(processed_dataset, src=0)
         dataset = processed_dataset[0]
-
     else:
-        # Remove the original fields (question, steps, answer) so only tokenized fields remain
+        # Single GPU / CPU: save resources with num_proc=4
         dataset = dataset.map(
-            # Insufficient resources with num_proc=32
+            # Remove the original fields (question, steps, answer) so only tokenized fields remain
             tokenize_sample, remove_columns=list(dataset.features), num_proc=4
         )
 
@@ -356,8 +356,9 @@ def get_cot_latent_dataset(
             "position_ids": list(range(len(tokens))),
         }
     # Process the entire dataset
-    if torch.cuda.device_count() > 1:
-        if dist.get_rank() == 0:
+    if dist.is_initialized() and torch.cuda.device_count() > 1:
+        rank = dist.get_rank()
+        if rank == 0:
             processed_dataset = base_dataset.map(
                 process_dataset, remove_columns=list(base_dataset.features), num_proc=32
             )
@@ -368,10 +369,9 @@ def get_cot_latent_dataset(
             processed_dataset = [None]
         dist.broadcast_object_list(processed_dataset, src=0)
         dataset = processed_dataset[0]
-    
     else:
+        # Single GPU / CPU: save system resources with num_proc=32
         processed_dataset = base_dataset.map(
-            # Insufficient system resources with num_proc=32
             process_dataset, remove_columns=list(base_dataset.features), num_proc=4
         )
         if shuffle:

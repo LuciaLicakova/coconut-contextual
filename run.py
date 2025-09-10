@@ -45,18 +45,24 @@ def main():
     dist_is_initialized = False
     
     if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-        dist_is_initialized = True
-        # NCCL is GPU-only
-        dist.init_process_group(backend="nccl")
-        rank = int(os.environ.get("RANK", 0))
-        world_size = int(os.environ.get("WORLD_SIZE", 1))
-        local_rank = int(os.environ.get("LOCAL_RANK", 0))
-        torch.cuda.set_device(local_rank)
+        # Only init distributed if torchrun is used
+        if "RANK" in os.environ and "WORLD_SIZE" in os.environ and "LOCAL_RANK" in os.environ:
+            dist.init_process_group(backend="nccl")
+            rank = int(os.environ.get("RANK"))
+            world_size = int(os.environ.get("WORLD_SIZE"))
+            local_rank = int(os.environ.get("LOCAL_RANK"))
+            torch.cuda.set_device(local_rank)
+        else:
+            # Single GPU: not distributed
+            rank = 0
+            world_size = 1
+            local_rank = 0
     else:
-        # Single GPU or CPU
+        # CPU
         rank = 0
         world_size = 1
         local_rank = 0
+
 
 
     # Load the configuration file
@@ -194,17 +200,17 @@ def main():
         model.to(torch.bfloat16)
 
 
-    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-        # GPU: If only eval, use DistributedDataParallel (to avoid bugs in fsdp)
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1 and torch.distributed.is_initialized():
+        # Multiple GPUs
         if configs.only_eval:
             parallel_model = DDP(model, device_ids=[rank])
-        # GPU: Fully Sharded Data Parallel shards (splits) the model’s layers across devices to save memory
         else:
-            parallel_model = FSDP(
-                model, auto_wrap_policy=llama_auto_wrap_policy, device_id=rank
-            )
+            parallel_model = FSDP(model, auto_wrap_policy=llama_auto_wrap_policy, device_id=rank)
+    elif torch.cuda.is_available() and torch.cuda.device_count() == 1:
+        # Single GPU
+        parallel_model = model.to(rank)
     else:
-        # CPU: no FSDP
+        # CPU
         parallel_model = model
 
     # Delete the original model object since it’s now wrapped inside parallel_model
@@ -278,6 +284,14 @@ def main():
             end_id,
             no_special_marker=configs.cot or configs.no_cot or configs.no_thoughts,
         )
+        
+        # Enable both single- and multi-GPU runs
+        valid_sampler = (
+            DistributedSampler(dataset_gen_val, shuffle=False)
+            if torch.distributed.is_initialized()
+            else None
+        )
+        
         # Wrap them in a PyTorch DataLoader for batch processing
         valid_gen_dataloader = torch.utils.data.DataLoader(
             dataset_gen_val,
@@ -286,7 +300,7 @@ def main():
             batch_size=1,
             collate_fn=collator,
             # in distributed runs each process gets its own slice of the dataset
-            sampler=None,
+            sampler=valid_sampler,
         )
 
         if not configs.only_eval:
@@ -301,16 +315,25 @@ def main():
                 no_special_marker=configs.cot or configs.no_cot or configs.no_thoughts,
                 shuffle=True,
             )
+
+            # The sampler is deterministic even if shuffle is set to True
+            # so we have shuffled the dataset when it's constructed (at every epoch)
+            train_sampler = (
+                DistributedSampler(dataset_train, shuffle=True)
+                if torch.distributed.is_initialized()
+                else None
+            )
+            
             # Wrap it in a DataLoader for batch training
             train_dataloader = torch.utils.data.DataLoader(
                 dataset_train,
                 num_workers=1,
-                # shuffling has to be set here because we don't use DistributedSampler
-                shuffle=True,
+                # shuffling has to be set here if don't use DistributedSampler
+                shuffle=True if train_sampler is None else False,
                 pin_memory=True,
                 batch_size=configs.batch_size_training,
                 collate_fn=collator,
-                sampler=None,
+                sampler=train_sampler,
             )
             # Prepare another version for loss evaluation
             dataset_loss_val = get_cot_latent_dataset(
@@ -323,6 +346,12 @@ def main():
                 no_special_marker=configs.cot or configs.no_cot or configs.no_thoughts,
             )
 
+            loss_sampler = (
+                DistributedSampler(dataset_loss_val, shuffle=False)
+                if torch.distributed.is_initialized()
+                else None
+            )
+
             valid_loss_dataloader = torch.utils.data.DataLoader(
                 dataset_loss_val,
                 num_workers=1,
@@ -331,7 +360,7 @@ def main():
                 pin_memory=True,
                 batch_size=configs.batch_size_training,
                 collate_fn=collator,
-                sampler=None,
+                sampler=loss_sampler,
             )
             # Reset the optimizer based on configs
             if configs.reset_optimizer:
