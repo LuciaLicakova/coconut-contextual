@@ -370,7 +370,7 @@ def get_cot_latent_dataset(
         dist.broadcast_object_list(processed_dataset, src=0)
         dataset = processed_dataset[0]
     else:
-        # Single GPU / CPU: save system resources with num_proc=32
+        # Single GPU / CPU: save system resources with lower num_proc
         processed_dataset = base_dataset.map(
             process_dataset, remove_columns=list(base_dataset.features), num_proc=4
         )

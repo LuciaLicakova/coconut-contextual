@@ -19,7 +19,7 @@ pip install --upgrade torch torchvision torchaudio --index-url https://download.
 # REPRODUCING EXPERIMENTS
 # Preprocess files to have gsm_train.json, gsm_test.json, gsm_valid.json in coconut-cpu-mini/data
 PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> python preprocessing/prepare_gsm.py 
-# Create CPU-friendly configuration files that tell Coconut how to train the tiny model on the GSM8K dataset: cpu_args\gsm_cot_cpu.yaml (stage 0), cpu_args\gsm_coconut_cpu.yaml (stage 1), cpu_args\gsm_coconut_eval_cpu.yaml
+# Create CPU-friendly configuration files that tell Coconut how to train the model on the GSM8K dataset: cpu_args\gsm_cot_cpu.yaml (stage 0), cpu_args\gsm_coconut_cpu.yaml (stage 1), cpu_args\gsm_coconut_eval_cpu.yaml
 
 # MULTIPLE GPUS
 PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini>wandb login
@@ -30,10 +30,10 @@ wandb: No netrc file found, creating one.
 wandb: Appending key for api.wandb.ai to your netrc file: C:\Users\lucia\_netrc
 wandb: Currently logged in as: lucia-licakova (lucia-licakova-johannes-kepler-universit-t-linz) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
 
-# Train on CPU (tiny model) with CoT as stage 0
+# Train on CPU with CoT as stage 0
 python run.py cpu_args/gsm_cot_cpu.yaml
 
-# Train using one GPU
+# Train on GPU
 PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> ssh student01
 D3a3SeNH
 nvidia-smi
@@ -50,6 +50,8 @@ CUDA_VISIBLE_DEVICES=1 python run.py cpu_args/gsm_cot_cpu.yaml
 CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=1 --nproc_per_node=1 run.py cpu_args/gsm_cot_cpu.yaml
 # 2 GPUs
 CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py args/gsm_cot.yaml
+# to see the output, trying with batch_size_traning: 16
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py cpu_args/gsm_cot_cpu.yaml |& tee output_2gpu.log
 
 
 
