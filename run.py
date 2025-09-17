@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-# Last update: Lucia Licakova, 2025-09-10
+# Last update: Lucia Licakova, 2025-09-17
 
 import torch
 import torch.distributed
@@ -138,21 +138,15 @@ def main():
 
     loaded = False
 
-    # Replace torch.load with safetensors-compatible loading
+    # Load the model using pytorch
     if configs.load_model_path is not None and configs.load_model_path != "None":
-        try:
-            # Use from_pretrained if the checkpoint is a directory
-            model = AutoModelForCausalLM.from_pretrained(configs.load_model_path, use_safetensors=True)
-            loaded = True
-        except Exception as e:
-            print("Failed to load via safetensors, trying torch.load fallback (not recommended on Windows):", e)
-            # Tell PyTorch where to put the weights (cpu, cuda:0, etc.)
-            saved_weights = torch.load(configs.load_model_path, map_location=torch.device(rank))
-            # Load them into the model
-            # strict=False: if some weights in the checkpoint don’t match any model parameter, ignore them
-            # and if some model parameters don’t have corresponding weights in the checkpoint, initialise them randomly
-            model.load_state_dict(saved_weights, strict=False)
-            loaded = True
+        # device: where to put the weights (cpu, cuda:0, etc.)
+        saved_weights = torch.load(configs.load_model_path, map_location=torch.device(rank))
+        # Load them into the model
+        # strict=False: if some weights in the checkpoint don’t match any model parameter, ignore them
+        # and if some model parameters don’t have corresponding weights in the checkpoint, initialise them randomly
+        model.load_state_dict(saved_weights, strict=False)
+        loaded = True
 
     # In this case the model needs extra tokens
     if not (configs.cot or configs.no_thoughts or configs.no_cot):

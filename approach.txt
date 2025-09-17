@@ -41,6 +41,7 @@ mkdir -p /system/user/studentwork/licakova/logs
 
 # Train on GPU
 PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> ssh student01
+ssh -p 5792 licakova@student01.ai-lab.jku.at
 D3a3SeNH
 nvidia-smi
 # Make sure GPU 1 is free.
@@ -60,6 +61,7 @@ CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=1 --nproc_per_node=1 run.py cpu_args/gs
 CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py cpu_args/gsm_cot_cpu.yaml |& tee /system/user/studentwork/licakova/logs/output_2gpu_resume.log
 
 12/25 batch 10102/12051 86%
+# Read the traceback INSIDE [licakova@student01 coconut-cpu-mini]$ less /system/user/studentwork/licakova/logs/output_2gpu_resume.log
 
 
 # After modifying locally
@@ -100,6 +102,45 @@ python run.py cpu_args/gsm_coconut_eval_cpu.yaml (MULTIPLE GPUS, torchrun)
 # Repeat the steps (do the experiments) for ProntoQA
 # Create datasets and yaml files for ProsQA
 # Repeat the steps (do the experiments) for ProsQA
+
+
+-----------------------------
+Author
+lucia-licakova
+State
+Running
+
+Start time
+September 17th, 2025 2:53:50 PM
+Runtime
+15m 46s
+Tracked hours
+-
+Run path
+lucia-licakova-johannes-kepler-universit-t-linz/coconut/zz2kjg85
+Hostname
+student01
+OS
+Linux-5.14.0-570.37.1.el9_6.x86_64-x86_64-with-glibc2.34
+Python version
+3.10.18
+Python executable
+/system/apps/studentenv/licakova/coconut/bin/python3.10
+Git repository
+git clone https://github.com/LuciaLicakova/coconut-cpu-mini.git
+Git state
+git checkout -b "gsm-cot" 1c8960fdc0e0b3f68d0b537bdf2c1dcc022f6553
+Command
+/system/user/studentwork/licakova/coconut-cpu-mini/run.py cpu_args/gsm_cot_cpu.yaml
+System Hardware
+CPU count	6
+Logical CPU count	12
+GPU count	4
+GPU type	NVIDIA GeForce GTX 1080 Ti
+W&B CLI Version
+0.18.7
+
+
 
 -----------------------------
 OUTPUT CUDA_VISIBLE_DEVICES=1 python run.py cpu_args/gsm_cot_cpu.yaml (requires smaller batch size)

@@ -19,10 +19,12 @@ save_only_improve: True
 uniform_prob: 0.0
 
 model_id: openai-community/gpt2
+### CHANGE BACK TO NONE
 load_model_path: None
 
 seed: 0
-resume: 0
+### CHANGE BACK TO 0
+resume: 13
 bf16: False
 train_path: data/gsm_train.json
 val_path: data/gsm_valid.json
