@@ -44,8 +44,7 @@ PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini> ssh 
 ssh -p 5792 licakova@student01.ai-lab.jku.at
 D3a3SeNH
 nvidia-smi
-# Make sure GPU 1 is free.
-# Update the Google Sheet: enter your name (licakova) and the GPU number to reserve it
+# Update the Google Sheet: enter licakova and the GPU number to reserve it
 # Activate environment
 source /system/apps/studentenv/miniconda3/bashrc
 conda activate coconut
@@ -60,7 +59,6 @@ CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=1 --nproc_per_node=1 run.py cpu_args/gs
 # to see the output, trying with batch_size_traning: 16
 CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py cpu_args/gsm_cot_cpu.yaml |& tee /system/user/studentwork/licakova/logs/output_2gpu_resume.log
 
-12/25 batch 10102/12051 86%
 # Read the traceback INSIDE [licakova@student01 coconut-cpu-mini]$ less /system/user/studentwork/licakova/logs/output_2gpu_resume.log
 
 
@@ -83,9 +81,6 @@ tmux attach -t coconut
 tmux attach -t coconut 
 nvidia-smi                  
 top                         
-# When done: kill process if needed
-ps aux | grep python
-kill <PID>
 # Update the Google Sheet to free the GPU.
 -----------------------
 # Ensure run.py works for a CPU (cpu_args, batch_size_training: 16), a single GPU (cpu_args), multiple GPUs (args)
