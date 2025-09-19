@@ -58,8 +58,12 @@ CUDA_VISIBLE_DEVICES=0 torchrun --nnodes=1 --nproc_per_node=1 run.py cpu_args/gs
 --not working CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py args/gsm_cot.yaml
 # to see the output, trying with batch_size_traning: 16
 CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py cpu_args/gsm_cot_cpu.yaml |& tee /system/user/studentwork/licakova/logs/output_2gpu_resume.log
+# TRAIN THE FIRST LATENT STAGE
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py cpu_args/gsm_coconut_cpu.yaml |& tee /system/user/studentwork/licakova/logs/output_coconut_latent.log
 
-# Read the traceback INSIDE [licakova@student01 coconut-cpu-mini]$ less /system/user/studentwork/licakova/logs/output_2gpu_resume.log
+# Read the traceback INSIDE [licakova@student01 coconut-cpu-mini]$
+less /system/user/studentwork/licakova/logs/output_2gpu_resume.log
+less /system/user/studentwork/licakova/logs/output_coconut_latent.log
 
 
 # After modifying locally
@@ -157,6 +161,43 @@ Accuracy on validation set: 1 / 32 = 0.03125
 Accuracy on validation set: 2 / 32 = 0.0625
 Accuracy on validation set: 2 / 32 = 0.0625
 Accuracy on validation set: 1 / 32 = 0.03125
+
+GSM-COT: after the full validation set has been evaluated per checkpoint 
+EPOCHS 01-06
+Accuracy on validation set: 127 / 500 = 0.254
+Accuracy on validation set: 166 / 500 = 0.332
+Accuracy on validation set: 187 / 500 = 0.374
+Accuracy on validation set: 200 / 500 = 0.4
+Accuracy on validation set: 205 / 500 = 0.41
+Accuracy on validation set: 221 / 500 = 0.442
+EPOCH 07
+Accuracy on validation set: 206 / 500 = 0.412
+EPOCH 08
+Accuracy on validation set: 213 / 500 = 0.426
+EPOCH 09
+Accuracy on validation set: 210 / 500 = 0.42
+EPOCH 10
+Accuracy on validation set: 219 / 500 = 0.438
+EPOCH 11
+Accuracy on validation set: 225 / 500 = 0.45
+EPOCH 12
+Accuracy on validation set: 209 / 500 = 0.418
+EPOCH 13
+Accuracy on validation set: 219 / 500 = 0.438
+EPOCH 14
+Accuracy on validation set: 215 / 500 = 0.43
+EPOCHS 15-25
+Accuracy on validation set: 214 / 500 = 0.428
+Accuracy on validation set: 217 / 500 = 0.434
+Accuracy on validation set: 223 / 500 = 0.446
+Accuracy on validation set: 220 / 500 = 0.44
+Accuracy on validation set: 220 / 500 = 0.44
+Accuracy on validation set: 223 / 500 = 0.446
+Accuracy on validation set: 203 / 500 = 0.406
+Accuracy on validation set: 225 / 500 = 0.45
+Accuracy on validation set: 212 / 500 = 0.424
+Accuracy on validation set: 218 / 500 = 0.436
+Accuracy on validation set: 218 / 500 = 0.436
 
 OUTPUT CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py args/gsm_cot.yaml
 

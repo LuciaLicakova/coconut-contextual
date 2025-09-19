@@ -141,11 +141,18 @@ def main():
     # Load the model using pytorch
     if configs.load_model_path is not None and configs.load_model_path != "None":
         # device: where to put the weights (cpu, cuda:0, etc.)
-        saved_weights = torch.load(configs.load_model_path, map_location=torch.device(rank))
-        # Load them into the model
-        # strict=False: if some weights in the checkpoint don’t match any model parameter, ignore them
-        # and if some model parameters don’t have corresponding weights in the checkpoint, initialise them randomly
-        model.load_state_dict(saved_weights, strict=False)
+        checkpoint = torch.load(configs.load_model_path, map_location=torch.device(rank))
+        if "model_state" in checkpoint:
+            # New format: load both the weights and the optimiser state into the model
+            model.load_state_dict(checkpoint["model_state"], strict=False)
+            if optimizer is not None:
+                optimizer.load_state_dict(checkpoint["optimizer_state"])
+            configs.resume = checkpoint.get("epoch", configs.resume)
+        else:
+            # Old format (weights only)
+            # strict=False: if some weights in the checkpoint don’t match any model parameter, ignore them
+            # and if some model parameters don’t have corresponding weights in the checkpoint, initialise them randomly
+            model.load_state_dict(checkpoint, strict=False)
         loaded = True
 
     # In this case the model needs extra tokens
@@ -459,12 +466,19 @@ def main():
                 and not configs.only_eval
             ):
                 # Extract model weights
-                states = parallel_model.state_dict()
+                states = parallel_model.state_dict()                
+                save_path = os.path.join(save_dir, f"checkpoint_{epoch + 1}"
                 if rank == 0:
                     torch.save(
-                        states, os.path.join(save_dir, f"checkpoint_{epoch + 1}")
+                        {
+                            "model_state": states,
+                            # Save current optimiser state
+                            "optimizer_state": optimizer.state_dict(),
+                            "epoch": epoch + 1,
+                        },
+                        save_path,
                     )
-                    print("saving model.")
+                    print(f"Saved model and optimizer to {save_path}")
 
                 if torch.distributed.is_initialized():
                     dist.barrier()
@@ -611,11 +625,20 @@ def main():
             and not configs.debug
             and not configs.only_eval
         ):
-            states = parallel_model.state_dict()
-
+            # Extract model weights
+            states = parallel_model.state_dict()                
+            save_path = os.path.join(save_dir, f"checkpoint_{epoch + 1}"
             if rank == 0:
-                torch.save(states, os.path.join(save_dir, f"checkpoint_{epoch + 1}"))
-                print("saving model.")
+                torch.save(
+                    {
+                        "model_state": states,
+                        # Save current optimiser state
+                        "optimizer_state": optimizer.state_dict(),
+                        "epoch": epoch + 1,
+                    },
+                    save_path,
+                )
+                print(f"Saved model and optimizer to {save_path}")
 
             best_acc = cor / total
 
