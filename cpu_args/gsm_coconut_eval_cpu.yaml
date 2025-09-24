@@ -19,19 +19,19 @@ save_only_improve: False
 uniform_prob: 0.0
 
 model_id: openai-community/gpt2
-load_model_path: exps/gsm8k_cot_cpu/gsm-cot/checkpoint_15
+load_model_path: exps/gsm8k_coconut_cpu/gsm-coconut/checkpoint_6
 
 seed: 0
-resume: 15
+resume: 6
 bf16: false
 train_path: data/gsm_train.json
-val_path: data/gsm_valid.json
+val_path: data/gsm_test.json
 reset_optimizer: True
 
-batch_size_training: 16
+batch_size_training: 8
 debug: False
-gradient_accumulation_steps: 1
+gradient_accumulation_steps: 2
 
 num_epochs: 25
-lr: 1.0e-4
+lr: 2.0e-5
 weight_decay: 0.01

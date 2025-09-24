@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-# Last update: Lucia Licakova, 2025-09-19
+# Last update: Lucia Licakova, 2025-09-24
 
 import torch
 import torch.distributed
@@ -289,7 +289,7 @@ def main():
         # Wrap them in a PyTorch DataLoader for batch processing
         valid_gen_dataloader = torch.utils.data.DataLoader(
             dataset_gen_val,
-            num_workers=1,
+            num_workers=4,
             pin_memory=True,
             batch_size=1,
             collate_fn=collator,
@@ -321,7 +321,7 @@ def main():
             # Wrap it in a DataLoader for batch training
             train_dataloader = torch.utils.data.DataLoader(
                 dataset_train,
-                num_workers=1,
+                num_workers=4,
                 # shuffling has to be set here if don't use DistributedSampler
                 shuffle=True if train_sampler is None else False,
                 pin_memory=True,
@@ -348,7 +348,7 @@ def main():
 
             valid_loss_dataloader = torch.utils.data.DataLoader(
                 dataset_loss_val,
-                num_workers=1,
+                num_workers=4,
                 # no shuffle even in DistributedSampler
                 shuffle=False,
                 pin_memory=True,
