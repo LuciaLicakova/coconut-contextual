@@ -1,7 +1,8 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
+# Last update: Lucia Licakova, 2025-09-08
 
-import json
+import json, os
 import argparse
 
 
@@ -11,7 +12,13 @@ def main(split):
     Args:
         split (str): The dataset split (e.g., train, test, valid).
     """
-    with open(f"data/gsm_{split}.txt") as f:
+    
+    # Ensure full path
+    data_dir = os.path.join(os.getcwd(), "data")
+    input_path = os.path.join(data_dir, f"gsm_{split}.txt")
+    output_path = os.path.join(data_dir, f"gsm_{split}.json")
+    
+    with open(input_path, encoding="utf-8") as f:
         data = f.readlines()
     data = [
         {
@@ -21,7 +28,7 @@ def main(split):
         }
         for d in data
     ]
-    json.dump(data, open(f"data/gsm_{split}.json", "w"))
+    json.dump(data, open(output_path, "w", encoding="utf-8"))
 
 
 if __name__ == "__main__":
