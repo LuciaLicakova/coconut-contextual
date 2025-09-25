@@ -29,8 +29,7 @@ PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini>wandb
 # Train on CPU with CoT as stage 0
 python run.py cpu_args/gsm_cot_cpu.yaml
 
-# IML Student Servers
-# To save logs in your work directory /system/user/studentwork/licakova/ (200GB quota)
+# IML Student Servers: to save logs in your work directory /system/user/studentwork/licakova/ (200GB quota)
 mkdir -p /system/user/studentwork/licakova/logs
 
 # Train on GPU
@@ -185,14 +184,23 @@ EPOCHS 5-25 (started from checkpoint 4)
 987:Accuracy on validation set: 133 / 500 = 0.266
 1031:Accuracy on validation set: 84 / 500 = 0.168
 
+GSM-COCONUT-EVAL (checkpoint 22 from stage 0 as a baseline CoT comparison: load_model_path: exps/gsm8k_cot_cpu/gsm-cot/checkpoint_22)
+[licakova@student01 coconut-cpu-mini]$ grep "Accuracy on validation set" /system/user/studentwork/licakova/logs/output_coconut_eval.log
+Accuracy on validation set: 567 / 1320 = 0.42954545454545456
+CoT match on validation set: 245 / 1320 = 0.1856060606060606
+
 GSM-COCONUT-EVAL (checkpoint 6 from stage 1 to report final Coconut results: load_model_path: exps/gsm8k_coconut_cpu/gsm-coconut/checkpoint_6)
 [licakova@student01 coconut-cpu-mini]$ grep "Accuracy on validation set" /system/user/studentwork/licakova/logs/output_coconut_eval.log
 Accuracy on validation set: 0 / 500 = 0.0
 
-
-GSM-COCONUT-EVAL (checkpoint 22 from stage 0 as a baseline CoT comparison: load_model_path: exps/gsm8k_cot_cpu/gsm-cot/checkpoint_22)
-[licakova@student01 coconut-cpu-mini]$ grep "Accuracy on validation set" /system/user/studentwork/licakova/logs/output_coconut_eval.log
-Accuracy on validation set: 225 / 500 = 0.45
+LOWER LR, GSM-COCONUT-STAGE-1:
+EPOCHS 5-10 (started from checkpoint 4)
+112:Accuracy on validation set: 161 / 500 = 0.322
+166:Accuracy on validation set: 179 / 500 = 0.358
+215:Accuracy on validation set: 134 / 500 = 0.268
+264:Accuracy on validation set: 167 / 500 = 0.334
+313:Accuracy on validation set: 166 / 500 = 0.332
+360:Accuracy on validation set: 166 / 500 = 0.332
 
 
 ----------------------
@@ -211,6 +219,15 @@ where
 --min-hops <n>, --max-hops <m>, --hops-skip <k> specifies which hop counts to test. An experiment is run with n hops, then another experiment is run with n + k hops, n + 2k, and so on until the number of hops exceeds m.
 --resume which experiment to continue from
 PS C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini\preprocessing\prontoqa> python run_experiment.py --model-name json --model-size dummy --ordering random --num-trials 10000 --few-shot-examples 0 --ontology fictional --min-hops 5 --max-hops 5 --hops-skip 1
+
+# TRAIN THE FIRST LATENT STAGE
+ssh -p 5792 licakova@student01.ai-lab.jku.at
+source /system/apps/studentenv/miniconda3/bashrc
+conda activate coconut
+cd /system/user/studentwork/licakova/coconut-cpu-mini
+tmux new -s coconut_pr
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py cpu_args/prontoqa_coconut.yaml |& tee /system/user/studentwork/licakova/logs/prontoqa_coconut_latent.log
+
 
 
 
