@@ -1,5 +1,3 @@
-# need 4 gpus
-
 project: coconut
 save_path: exps/prosqa_coconut_cpu
 name: prosqa-coconut

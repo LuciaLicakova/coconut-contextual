@@ -226,10 +226,77 @@ source /system/apps/studentenv/miniconda3/bashrc
 conda activate coconut
 cd /system/user/studentwork/licakova/coconut-cpu-mini
 tmux new -s coconut_pr
+tmux attach -t coconut_pr
 CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py cpu_args/prontoqa_coconut.yaml |& tee /system/user/studentwork/licakova/logs/prontoqa_coconut_latent.log
 
 
+PRONTOQA TRAINING batch_size_training=8, gradient_accumulation_steps=2: grep -n "Accuracy on validation set" /system/user/studentwork/licakova/logs/prontoqa_coconut_latent.log 
+EPOCHS 1-25
+141:Accuracy on validation set: 110 / 200 = 0.55
+231:Accuracy on validation set: 190 / 200 = 0.95
+321:Accuracy on validation set: 190 / 200 = 0.95
+411:Accuracy on validation set: 193 / 200 = 0.965
+501:Accuracy on validation set: 194 / 200 = 0.97
+586:Accuracy on validation set: 197 / 200 = 0.985
+671:Accuracy on validation set: 200 / 200 = 1.0
+756:Accuracy on validation set: 195 / 200 = 0.975
+841:Accuracy on validation set: 199 / 200 = 0.995
+926:Accuracy on validation set: 199 / 200 = 0.995
+1006:Accuracy on validation set: 154 / 200 = 0.77
+1085:Accuracy on validation set: 170 / 200 = 0.85
+1165:Accuracy on validation set: 195 / 200 = 0.975
+1245:Accuracy on validation set: 200 / 200 = 1.0
+1325:Accuracy on validation set: 198 / 200 = 0.99
+1400:Accuracy on validation set: 150 / 200 = 0.75
+1475:Accuracy on validation set: 178 / 200 = 0.89
+1550:Accuracy on validation set: 192 / 200 = 0.96
+1625:Accuracy on validation set: 198 / 200 = 0.99
+1700:Accuracy on validation set: 200 / 200 = 1.0
+1770:Accuracy on validation set: 198 / 200 = 0.99
+1840:Accuracy on validation set: 199 / 200 = 0.995
+1910:Accuracy on validation set: 199 / 200 = 0.995
+1980:Accuracy on validation set: 200 / 200 = 1.0
+2050:Accuracy on validation set: 198 / 200 = 0.99
+EPOCHS 26-50
+2115:Accuracy on validation set: 193 / 200 = 0.965
+2180:Accuracy on validation set: 199 / 200 = 0.995
+2245:Accuracy on validation set: 200 / 200 = 1.0
+2310:Accuracy on validation set: 199 / 200 = 0.995
+2375:Accuracy on validation set: 193 / 200 = 0.965
+2435:Accuracy on validation set: 194 / 200 = 0.97
+2495:Accuracy on validation set: 198 / 200 = 0.99
+2555:Accuracy on validation set: 198 / 200 = 0.99
+2615:Accuracy on validation set: 200 / 200 = 1.0
+2675:Accuracy on validation set: 200 / 200 = 1.0
+2735:Accuracy on validation set: 199 / 200 = 0.995
+2795:Accuracy on validation set: 200 / 200 = 1.0
+2855:Accuracy on validation set: 200 / 200 = 1.0
+2915:Accuracy on validation set: 199 / 200 = 0.995
+2975:Accuracy on validation set: 200 / 200 = 1.0
+3035:Accuracy on validation set: 200 / 200 = 1.0
+3095:Accuracy on validation set: 200 / 200 = 1.0
+3155:Accuracy on validation set: 198 / 200 = 0.99
+3215:Accuracy on validation set: 199 / 200 = 0.995
+3275:Accuracy on validation set: 200 / 200 = 1.0
+3335:Accuracy on validation set: 200 / 200 = 1.0
+3395:Accuracy on validation set: 200 / 200 = 1.0
+3455:Accuracy on validation set: 200 / 200 = 1.0
+3515:Accuracy on validation set: 198 / 200 = 0.99
+3575:Accuracy on validation set: 199 / 200 = 0.995
 
+PRONTOQA-COCONUT-EVAL (load_model_path: exps/prontoqa_coconut_cpu/prontoqa-coconut/checkpoint_48)
+Loads the model from the checkpoint you give in load_model_path.
+Prepares the test dataset.
+Runs generation with the model on each validation question.
+Computes metrics (validation accuracy and CoT match) and prints/logs them.
+Exits immediately after evaluation (no optimizer, no checkpoint saving, no training loop).
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py cpu_args/prontoqa_coconut_eval.yaml |& tee /system/user/studentwork/licakova/logs/prontoqa_coconut_eval.log
+
+[licakova@student01 coconut-cpu-mini]$ grep "Accuracy on validation set" /system/user/studentwork/licakova/logs/prontoqa_coconut_eval.log
+Accuracy on validation set: 0 / 800 = 0.0
+CoT match on validation set: 0 / 800 = 0.0
+
+PRONTOQA TRAINING batch_size_training=8, gradient_accumulation_steps=4: grep -n "Accuracy on validation set" /system/user/studentwork/licakova/logs/prontoqa_coconut_latent.log
 
 
 
