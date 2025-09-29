@@ -71,7 +71,7 @@ scp -P 5792 C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-m
 scp -P 5792 -r C:\Users\lucia\AppData\Local\Programs\Python\Python310\coconut-cpu-mini\cpu_args licakova@student01.ai-lab.jku.at:/system/user/studentwork/licakova/coconut-cpu-mini/
 
 # Attach tmux
-ssh -p 5792 licakova@student01.ai-lab.jku.at
+ssh -p 5792 licakova@student03.ai-lab.jku.at
 tmux attach -t coconut
 # Run the code
 
@@ -290,13 +290,70 @@ Prepares the test dataset.
 Runs generation with the model on each validation question.
 Computes metrics (validation accuracy and CoT match) and prints/logs them.
 Exits immediately after evaluation (no optimizer, no checkpoint saving, no training loop).
+ssh -p 5792 licakova@student03.ai-lab.jku.at
+source /system/apps/studentenv/miniconda3/bashrc
+conda activate coconut
+cd /system/user/studentwork/licakova/coconut-cpu-mini
+tmux new -s coconut
+tmux attach -t coconut
 CUDA_VISIBLE_DEVICES=0,1 torchrun --nnodes=1 --nproc_per_node=2 run.py cpu_args/prontoqa_coconut_eval.yaml |& tee /system/user/studentwork/licakova/logs/prontoqa_coconut_eval.log
 
+WITH EFFECTIVE BATCH SIZE: 32
 [licakova@student01 coconut-cpu-mini]$ grep "Accuracy on validation set" /system/user/studentwork/licakova/logs/prontoqa_coconut_eval.log
 Accuracy on validation set: 0 / 800 = 0.0
 CoT match on validation set: 0 / 800 = 0.0
 
 PRONTOQA TRAINING batch_size_training=8, gradient_accumulation_steps=4: grep -n "Accuracy on validation set" /system/user/studentwork/licakova/logs/prontoqa_coconut_latent.log
+140:Accuracy on validation set: 85 / 200 = 0.425
+230:Accuracy on validation set: 182 / 200 = 0.91
+320:Accuracy on validation set: 186 / 200 = 0.93
+410:Accuracy on validation set: 192 / 200 = 0.96
+500:Accuracy on validation set: 194 / 200 = 0.97
+585:Accuracy on validation set: 194 / 200 = 0.97
+670:Accuracy on validation set: 195 / 200 = 0.975
+755:Accuracy on validation set: 199 / 200 = 0.995
+840:Accuracy on validation set: 198 / 200 = 0.99
+925:Accuracy on validation set: 198 / 200 = 0.99
+1005:Accuracy on validation set: 138 / 200 = 0.69
+1085:Accuracy on validation set: 190 / 200 = 0.95
+1165:Accuracy on validation set: 197 / 200 = 0.985
+1245:Accuracy on validation set: 198 / 200 = 0.99
+1325:Accuracy on validation set: 198 / 200 = 0.99
+1400:Accuracy on validation set: 179 / 200 = 0.895
+1475:Accuracy on validation set: 186 / 200 = 0.93
+1550:Accuracy on validation set: 189 / 200 = 0.945
+1625:Accuracy on validation set: 195 / 200 = 0.975
+1700:Accuracy on validation set: 196 / 200 = 0.98
+1770:Accuracy on validation set: 196 / 200 = 0.98
+1840:Accuracy on validation set: 200 / 200 = 1.0
+1910:Accuracy on validation set: 200 / 200 = 1.0
+1980:Accuracy on validation set: 200 / 200 = 1.0
+2050:Accuracy on validation set: 200 / 200 = 1.0
+2115:Accuracy on validation set: 189 / 200 = 0.945
+2180:Accuracy on validation set: 198 / 200 = 0.99
+2245:Accuracy on validation set: 200 / 200 = 1.0
+2310:Accuracy on validation set: 200 / 200 = 1.0
+2375:Accuracy on validation set: 200 / 200 = 1.0
+2435:Accuracy on validation set: 195 / 200 = 0.975
+2495:Accuracy on validation set: 200 / 200 = 1.0
+2555:Accuracy on validation set: 197 / 200 = 0.985
+2615:Accuracy on validation set: 200 / 200 = 1.0
+2675:Accuracy on validation set: 200 / 200 = 1.0
+2735:Accuracy on validation set: 199 / 200 = 0.995
+2795:Accuracy on validation set: 200 / 200 = 1.0
+2855:Accuracy on validation set: 200 / 200 = 1.0
+2915:Accuracy on validation set: 200 / 200 = 1.0
+2975:Accuracy on validation set: 200 / 200 = 1.0
+3035:Accuracy on validation set: 200 / 200 = 1.0
+3095:Accuracy on validation set: 200 / 200 = 1.0
+3155:Accuracy on validation set: 200 / 200 = 1.0
+3215:Accuracy on validation set: 200 / 200 = 1.0
+3275:Accuracy on validation set: 200 / 200 = 1.0
+3335:Accuracy on validation set: 200 / 200 = 1.0
+3395:Accuracy on validation set: 198 / 200 = 0.99
+3455:Accuracy on validation set: 200 / 200 = 1.0
+3515:Accuracy on validation set: 199 / 200 = 0.995
+3575:Accuracy on validation set: 200 / 200 = 1.0
 
 
 
