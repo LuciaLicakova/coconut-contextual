@@ -148,7 +148,7 @@ torchrun --nnodes 1 --nproc_per_node 4 run.py args/prontoqa_coconut.yaml
 Find the checkpoint with best validation accuracy, and put the path as `load_model_path` in [args/prosqa_coconut_eval.yaml](args/prosqa_coconut_eval.yaml). To evaluate:
 
 ```bash
-torchrun --nnodes 1 --nproc_per_node 4 run.py args/prosqa_coconut_eval.yaml
+torchrun --nnodes 1 --nproc_per_node 4 run.py args/prontoqa_coconut_eval.yaml
 ```
 
 
