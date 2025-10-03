@@ -42,28 +42,13 @@ def main():
     parser = argparse.ArgumentParser(description="coconut")
     parser.add_argument("config_file")
     args = parser.parse_args()
-    dist_is_initialized = False
     
-    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-        # Only init distributed if torchrun is used
-        if "RANK" in os.environ and "WORLD_SIZE" in os.environ and "LOCAL_RANK" in os.environ:
-            dist.init_process_group(backend="nccl")
-            rank = int(os.environ.get("RANK"))
-            world_size = int(os.environ.get("WORLD_SIZE"))
-            local_rank = int(os.environ.get("LOCAL_RANK"))
-            torch.cuda.set_device(local_rank)
-        else:
-            # Single GPU: not distributed
-            rank = 0
-            world_size = 1
-            local_rank = 0
-    else:
-        # CPU
-        rank = 0
-        world_size = 1
-        local_rank = 0
-
-
+    # Initialise distributed environment
+    dist.init_process_group("nccl")
+    local_rank = int(os.environ["LOCAL_RANK"])
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    torch.cuda.set_device(local_rank)
 
     # Load the configuration file
     with open(args.config_file, encoding="utf-8") as f:
@@ -139,14 +124,34 @@ def main():
     loaded = False
 
     # Load the model using pytorch
-    if configs.load_model_path is not None and configs.load_model_path != "None":
-        # device: where to put the weights (cpu, cuda:0, etc.)
+    if configs.load_model_path != "None":
         saved_weights = torch.load(configs.load_model_path, map_location=torch.device(rank))
-        # Load them into the model
-        # strict=False: if some weights in the checkpoint don’t match any model parameter, ignore them
-        # and if some model parameters don’t have corresponding weights in the checkpoint, initialise them randomly
-        model.load_state_dict(saved_weights, strict=False)
-        loaded = True
+
+        # Coconut mode, but checkpoint contains no Coconut model
+        if configs.coconut and not any(
+            [k.startswith("base_causallm") for k in saved_weights.keys()]
+        ):
+            # Loading a base model into coconut model
+            # e.g., for GSM8k, we used a SFTed model to skip the stage 0
+            loaded = True
+            # Load the weights from the checkpoint into the model
+            print(model.load_state_dict(saved_weights, strict=False))
+        # No Coconut mode but the checkpoint contains Coconut model
+        elif not configs.coconut and any(
+            [k.startswith("base_causallm") for k in saved_weights.keys()]
+        ):
+            raise ValueError("Cannot load coconut model weights into a causallm model")
+        # Coconut mode and Coconut model saved in the checkpoint
+        elif configs.coconut and any(
+            [k.startswith("base_causallm") for k in saved_weights.keys()]
+        ):
+            # Training was interrupted and resumed but this will be handled later
+            pass
+
+        else:
+            # Resume or evaluate a supervised fine-tuned model
+            loaded = True
+            print(model.load_state_dict(saved_weights, strict=False))
 
     # In this case the model needs extra tokens
     if not (configs.cot or configs.no_thoughts or configs.no_cot):
@@ -173,15 +178,13 @@ def main():
         # Wrap the model in Coconut class
         model = Coconut(model, latent_id, start_id, end_id, tokenizer.eos_token_id)
 
+    if configs.load_model_path != "None" and not loaded:
+        print(model.load_state_dict(saved_weights, strict=False))
+
     # With multiple GPUs, each process gets its own rank (GPU ID)
     print(f"Running FSDP on rank = {rank}, world size = {world_size}")
+    model = model.to(rank)
     
-    device = torch.device("cuda", rank) if torch.cuda.is_available() else torch.device("cpu")
-    # Only move to CUDA if available
-    if torch.cuda.is_available():
-        model = model.to(device)
-
-
     llama_auto_wrap_policy = functools.partial(
         transformer_auto_wrap_policy,
         transformer_layer_cls={
@@ -192,20 +195,15 @@ def main():
     # If the config enables bf16 (only on GPUs), convert the model to bfloat16 precision
     if configs.bf16:
         model.to(torch.bfloat16)
+        
+    # if only eval, use ddp (to avoid bugs in fsdp)
+    if configs.only_eval:
+        parallel_model = DDP(model, device_ids=[rank])
 
-
-    if torch.cuda.is_available() and torch.cuda.device_count() > 1 and torch.distributed.is_initialized():
-        # Multiple GPUs
-        if configs.only_eval:
-            parallel_model = DDP(model, device_ids=[rank])
-        else:
-            parallel_model = FSDP(model, auto_wrap_policy=llama_auto_wrap_policy, device_id=rank)
-    elif torch.cuda.is_available() and torch.cuda.device_count() == 1:
-        # Single GPU
-        parallel_model = model.to(rank)
     else:
-        # CPU
-        parallel_model = model
+        parallel_model = FSDP(
+            model, auto_wrap_policy=llama_auto_wrap_policy, device_id=rank
+        )
 
     # Delete the original model object since it’s now wrapped inside parallel_model
     del model
@@ -365,9 +363,8 @@ def main():
                     lr=configs.lr,
                     weight_decay=configs.weight_decay,
                 )
-            # Train the object whether it's wrapped for distributed
-            # training (parallel_model.module) or not (parallel_model)
-            getattr(parallel_model, "module", parallel_model).train()
+            # Train the object wrapped for distributed training
+            parallel_model.module.train()
             # Number of mini-batches in one epoch // how many batches to process before updating weights (optimizer.step()) 
             # Number of optimizer updates per epoch
             total_length = len(train_dataloader) // configs.gradient_accumulation_steps
@@ -410,7 +407,7 @@ def main():
                 # Move tensors in the batch (input IDs, attention masks, labels, etc.) to the device
                 # Exclude "idx" because that’s just metadata.
                 batch = {
-                    key: batch[key].to(device) for key in batch.keys() if key != "idx"
+                    key: batch[key].to(rank) for key in batch.keys() if key != "idx"
                 }
                 # Run the model on this batch to get outputs
                 outputs = parallel_model(**batch)
@@ -478,12 +475,12 @@ def main():
             # Disable gradient computation during validation
             with torch.no_grad():
                 # Switch to evaluation mode (either wrapped or not)
-                getattr(parallel_model, "module", parallel_model).eval()
+                parallel_model.module.eval()
                 # Iterate through validation batches and compute loss
                 for step, batch in enumerate(valid_loss_dataloader):
 
                     batch = {
-                        key: batch[key].to(device) for key in batch.keys() if key != "idx"
+                        key: batch[key].to(rank) for key in batch.keys() if key != "idx"
                     }
 
                     outputs = parallel_model(**batch)
@@ -508,26 +505,25 @@ def main():
             colour="blue", desc=f"Test Accuracy", total=total_length, dynamic_ncols=True
         )
         # Counters
-        device = torch.device("cuda", rank) if torch.cuda.is_available() else torch.device("cpu")
         cor, cor_cot, total = (
             # How many answers match the ground truth
-            torch.tensor(0, device=device),
+            torch.tensor(0, device=rank),
             # How many chain-of-thought outputs match the reference
-            torch.tensor(0, device=device),
+            torch.tensor(0, device=rank),
             # Total examples processed
-            torch.tensor(0, device=device),
+            torch.tensor(0, device=rank),
         )
 
         with torch.no_grad():
             # Handle both wrapped and not wrapped models
-            getattr(parallel_model, "module", parallel_model).eval()
+            parallel_model.module.eval()
             for idx, batch in enumerate(valid_gen_dataloader):
                 # A tensor that stores the original index of this example in the validation dataset
                 # Which row in the original dataset this batch corresponds to
                 test_idx = batch["idx"][0]
 
                 batch = {
-                    k: v.to(device)
+                    k: v.to(rank)
                     for k, v in batch.items()
                     if v != None and k not in ["idx", "position_ids"]
                 }
@@ -548,7 +544,7 @@ def main():
                     and torch.distributed.is_initialized()
                 )
                 # Generate text tokens for the input question (use the correct model)
-                outputs = getattr(parallel_model, "module", parallel_model).generate(
+                outputs = parallel_model.module.generate(
                     **batch,
                     max_new_tokens=max_new_tokens,
                     synced_gpus=use_synced_gpus,
