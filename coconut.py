@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-# Last update: Lucia Licakova, 2025-09-05
+# Last update: Lucia Licakova, 2025-10-04
 
 import torch
 import torch.nn as nn
@@ -11,6 +11,10 @@ from transformers.models.gpt2 import GPT2LMHeadModel
 Outputs = namedtuple("Outputs", ["loss", "inputs_embeds", "logits"])
 # Upper limit for latent thoughts
 MAX_N_LATENT = 8
+# number of previous tokens to consider for context
+LATENT_WINDOW_SIZE = 3
+# weights for those tokens, sum = 1 -> no need to normalise
+LATENT_WEIGHTS = [0.6, 0.3, 0.1]
 
 
 class Coconut(nn.Module):
@@ -31,6 +35,10 @@ class Coconut(nn.Module):
         self.eos_token_id = eos_token_id
         self.start_latent_id = start_latent_id
         self.end_latent_id = end_latent_id
+        # parameters for context
+        self.latent_window_size = LATENT_WINDOW_SIZE       
+        self.latent_weights = torch.tensor(LATENT_WEIGHTS)
+        
 
         # tested with GPT2 and Llama3
         if isinstance(self.base_causallm, GPT2LMHeadModel):
@@ -160,14 +168,33 @@ class Coconut(nn.Module):
                 for batch_idx in range(inputs_embeds.shape[0])
             ]
 
-            # Replace each latent token position's embedding with the previous token’s final-layer hidden state
+            # Ensure weights are on the right device
+            weights = self.latent_weights.to(inputs_embeds.device)
+            # Replace each latent token position's embedding with
+            # a weighted combination of the last n_tokens hidden states
             for idx_pair in filling_indices:
                 batch_idx, token_idx = idx_pair
-
-                tensor_list[batch_idx][token_idx] = hidden_states[
-                    # "-1" take the hidden state of the token immediately before the latent token
-                    batch_idx, token_idx - 1 - hidden_states_offset, :
+                # Determine how many previous tokens are available
+                n_tokens = min(self.latent_window_size, token_idx - hidden_states_offset)
+                # Safety check for the first token
+                if n_tokens <= 0:
+                    continue
+                # Get the hidden states of the n_tokens tokens immediately before the last token
+                hidden_slice = hidden_states[
+                    batch_idx, token_idx - n_tokens - hidden_states_offset: token_idx - hidden_states_offset, :
                 ]
+                # Take the last n_tokens elements from the weight vector and normalise these selected
+                # weights so they sum to 1 (even if there are fewer tokens available)
+                w = weights[-n_tokens:] / weights[-n_tokens:].sum()
+                # Reshape the 1D weight vector to (n_tokens, 1), multiply the hidden states element-wise
+                # Sum accross the n_tokens dimension, return a weighted combination of the previous hidden states
+                weighted_hidden = (hidden_slice * w.view(-1, 1)).sum(dim=0)
+                
+                tensor_list[batch_idx][token_idx] = weighted_hidden
+##                tensor_list[batch_idx][token_idx] = hidden_states[
+##                    # "-1" take the hidden state of the token immediately before the latent token
+##                    batch_idx, token_idx - 1 - hidden_states_offset, :
+##                ]
 
             # Convert the Python lists back into a proper tensor of shape (batch, seq_len, hidden_size)
             inputs_embeds = torch.stack(
