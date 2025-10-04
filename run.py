@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-# Last update: Lucia Licakova, 2025-09-24
+# Last update: Lucia Licakova, 2025-10-03
 
 import torch
 import torch.distributed
