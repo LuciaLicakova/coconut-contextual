@@ -1,6 +1,6 @@
 # Coconut
 
-The code base is the official implementation of [Training Large Language Models to Reason in a Continuous Latent Space](https://arxiv.org/abs/2412.06769).
+The code base is an adapted implementation of [Training Large Language Models to Reason in a Continuous Latent Space](https://arxiv.org/abs/2412.06769), modified to incorporate a contextual latent embedding, where each latent token is computed as a weighted average of the last m hidden states rather than only the immediately preceding state.
 
 ![coconut](assets/coconut.png)
 
@@ -95,7 +95,7 @@ torchrun --nnodes 1 --nproc_per_node N_GPUS run.py PATH_TO_ARGS
 
 Here we provide instructions to reproduce our experiments in the paper.
 
-All the commands below assume 4 * A100 (80GB) GPUs. You may change the corresponding arguments in the config file (`batch_size_training`, `gradient_accumulation_steps`) and `nproc_per_node` when launching the run, to adapt your resources.
+All commands below assume 2 * 11GB GPUs, reflecting the hardware constraints of this reproduction. Adjust `batch_size_training`, `gradient_accumulation_steps`, and `nproc_per_node` accordingly to fit your resources. The effective batch size has been preserved across datasets using gradient accumulation.
 
 
 ### GSM8K
@@ -171,7 +171,7 @@ torchrun --nnodes 1 --nproc_per_node 4 run.py args/prosqa_coconut_eval.yaml
 
 
 ## Citation
-If you use this code base in your research, please cite our paper with the following BibTex entry:
+If you use this code base in your research, please cite the original paper with the following BibTex entry:
 ```bibtex
 @article{hao2024training,
   title={Training Large Language Models to Reason in a Continuous Latent Space},
