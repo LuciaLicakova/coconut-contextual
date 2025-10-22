@@ -55,48 +55,9 @@ The file should contain a list of data points. Each data point is composed of a 
 - [ProntoQA](https://arxiv.org/pdf/2210.01240) – symbolic reasoning
 - **ProsQA** – procedural reasoning
 
-Preprocessing scripts for these datasets are provided in the preprocessing/ directory.
+Preprocessing scripts for downloading and using these datasets are provided in the `preprocessing/` directory.
 
 ---
-
-## Configuration
-
-All experiment settings are defined in YAML files (for example [here](cpu_args/gsm_coconut.yaml)).
-
-- **General settings**
-
-  - `project`: WandB project name
-  - `save_path`: Your path to store the checkpoints
-  - `only_eval`: If true, only load a model and test on the data from `val_path` (must be used along with `load_model_path`). Otherwise, train the model on `train_path` and test on `val_path` after every epoch.
-
-- **Method**
-  - `coconut`: Train a coconut model
-  - `cot`: Train a chain-of-thought model
-  - `no_thoughts`: Train a coconut (w/o thought) model
-  - `no_cot`: Train a no-cot model
-
-- **Training settings**
-
-  - `c_thought`: Number of continuous latent thoughts for each reasoning step
-  - `epochs_per_stage`: Number of epochs for every training stage
-  - `max_latent_stage`: The maximum number of training stages (in addition to the initial stage)
-  - `pad_latent_to_max`: If the number of reasoning steps is fewer than the index of current training stage, pad the number of continuous latent thoughts.
-  - `save_only_improve`: Save the model only when there the best validation accuracy is updated. Recommended to set `False` for Coconut model training, because otherwise the checkpoints in the last stage might not get saved.
-  - `uniform_prob`: The probability to mix data from other stages. It is set to 0 for a standard experiment.
-  - `model_id`: Huggingface model ID to load as the initialisation, e.g., `openai-community/gpt2`
-  - `load_model_path`: The path to a checkpoint to load. Used in two cases: (1) for evaluation (2) to initialize Coconut from a CoT-tuned model.
-  - `seed`: Random seed.
-  - `resume`: The epoch to resume from. Can be used when we want to skip the initial training stages.
-  - `bf16`: Whether to use bf16 (mixed-precision) training.
-  - `train_path`: Path to the training set.
-  - `val_path`: Path to the validation or test set. If we only run evaluation (`only_eval = True`), this path should point to the test set. During training, it should point to the validation set.
-  - `reset_optimizer`: Whether to reset the optimizer when switching training stages.
-  - `batch_size_training`: Batch size to train the model per GPU.
-  - `debug`: If true, there is no WandB logging and model saving and only a subset of data is used.
-  - `gradient_accumulation_steps`: Gradient accumulation steps.
-  - `num_epochs`: Maximum training epochs.
-  - `lr`: Learning rate.
-  - `weight_decay`: Weight decay.
 
 ## Running Experiments
 
@@ -166,6 +127,45 @@ Find the checkpoint with the best validation accuracy, put the path as `load_mod
 ```bash
 torchrun --nnodes 1 --nproc_per_node 2 run.py cpu_args/prosqa_coconut_eval.yaml
 ```
+
+## Configuration
+
+All experiment settings are defined in YAML files (for example [here](cpu_args/gsm_coconut.yaml)).
+
+- **General settings**
+
+  - `project`: WandB project name
+  - `save_path`: Your path to store the checkpoints
+  - `only_eval`: If true, only load a model and test on the data from `val_path` (must be used along with `load_model_path`). Otherwise, train the model on `train_path` and test on `val_path` after every epoch.
+
+- **Method**
+  - `coconut`: Train a coconut model
+  - `cot`: Train a chain-of-thought model
+  - `no_thoughts`: Train a coconut (w/o thought) model
+  - `no_cot`: Train a no-cot model
+
+- **Training settings**
+
+  - `c_thought`: Number of continuous latent thoughts for each reasoning step
+  - `epochs_per_stage`: Number of epochs for every training stage
+  - `max_latent_stage`: The maximum number of training stages (in addition to the initial stage)
+  - `pad_latent_to_max`: If the number of reasoning steps is fewer than the index of current training stage, pad the number of continuous latent thoughts.
+  - `save_only_improve`: Save the model only when there the best validation accuracy is updated. Recommended to set `False` for Coconut model training, because otherwise the checkpoints in the last stage might not get saved.
+  - `uniform_prob`: The probability to mix data from other stages. It is set to 0 for a standard experiment.
+  - `model_id`: Huggingface model ID to load as the initialisation, e.g., `openai-community/gpt2`
+  - `load_model_path`: The path to a checkpoint to load. Used in two cases: (1) for evaluation (2) to initialize Coconut from a CoT-tuned model.
+  - `seed`: Random seed.
+  - `resume`: The epoch to resume from. Can be used when we want to skip the initial training stages.
+  - `bf16`: Whether to use bf16 (mixed-precision) training.
+  - `train_path`: Path to the training set.
+  - `val_path`: Path to the validation or test set. If we only run evaluation (`only_eval = True`), this path should point to the test set. During training, it should point to the validation set.
+  - `reset_optimizer`: Whether to reset the optimizer when switching training stages.
+  - `batch_size_training`: Batch size to train the model per GPU.
+  - `debug`: If true, there is no WandB logging and model saving and only a subset of data is used.
+  - `gradient_accumulation_steps`: Gradient accumulation steps.
+  - `num_epochs`: Maximum training epochs.
+  - `lr`: Learning rate.
+  - `weight_decay`: Weight decay.
 
 ## Citation
 If you use this code base in your research, please cite the original paper with the following BibTex entry:
