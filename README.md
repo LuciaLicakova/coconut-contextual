@@ -61,7 +61,7 @@ Preprocessing scripts for downloading and using these datasets are provided in t
 
 ## Running Experiments
 
-All commands below assume 2 * 11GB GPUs, reflecting the hardware constraints of this reproduction. Adjust `batch_size_training`, `gradient_accumulation_steps`, and `nproc_per_node` to fit your resources. The effective batch size can be preserved across datasets using gradient accumulation.
+All commands below assume 2 × 11GB GPUs, reflecting the hardware constraints of this reproduction. Adjust `batch_size_training`, `gradient_accumulation_steps`, and `nproc_per_node` to fit your resources. The effective batch size can be preserved across datasets using gradient accumulation.
 
 ### GSM8K
 
