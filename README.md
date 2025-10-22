@@ -115,7 +115,7 @@ torchrun --nnodes 1 --nproc_per_node 2 run.py cpu_args/prontoqa_coconut_eval.yam
 ```
 ### ProsQA
 
-The ProsQA dataset is at [data/prosqa_*.json](data).
+The ProsQA dataset is in [data/prosqa_*.json](data).
 
 Run the following to train the model:
 ```bash
@@ -136,7 +136,7 @@ All experiment settings are defined in YAML files (for example [here](cpu_args/g
 
   - `project`: WandB project name
   - `save_path`: Your path to store the checkpoints
-  - `only_eval`: If true, only load a model and test on the data from `val_path` (must be used along with `load_model_path`). Otherwise, train the model on `train_path` and test on `val_path` after every epoch.
+  - `only_eval`: If true, only load the model and test on the data from `val_path` (must be used along with `load_model_path`). Otherwise, train the model on `train_path` and test on `val_path` after every epoch.
 
 - **Method**
   - `coconut`: Train a coconut model
